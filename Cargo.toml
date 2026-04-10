@@ -10,6 +10,10 @@ readme = "README.md"
 keywords = ["cli", "llm", "token", "claude", "proxy"]
 categories = ["command-line-utilities", "development-tools"]
 
+[[bin]]
+name = "rtk"
+path = "src/main.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 anyhow = "1.0"
