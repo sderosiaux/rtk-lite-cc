@@ -119,10 +119,10 @@ fn append_bash_rules(rules_value: Option<&Value>, target: &mut Vec<String>) {
         return;
     };
     for rule in arr {
-        if let Some(s) = rule.as_str() {
-            if s.starts_with("Bash(") {
-                target.push(extract_bash_pattern(s).to_string());
-            }
+        if let Some(s) = rule.as_str()
+            && s.starts_with("Bash(")
+        {
+            target.push(extract_bash_pattern(s).to_string());
         }
     }
 }
@@ -176,10 +176,10 @@ fn find_project_root() -> Option<PathBuf> {
 ///
 /// Returns the original string unchanged if it does not match the expected format.
 pub(crate) fn extract_bash_pattern(rule: &str) -> &str {
-    if let Some(inner) = rule.strip_prefix("Bash(") {
-        if let Some(pattern) = inner.strip_suffix(')') {
-            return pattern;
-        }
+    if let Some(inner) = rule.strip_prefix("Bash(")
+        && let Some(pattern) = inner.strip_suffix(')')
+    {
+        return pattern;
     }
     rule
 }

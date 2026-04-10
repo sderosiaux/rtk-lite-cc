@@ -258,10 +258,10 @@ fn remove_hook_from_json(root: &mut serde_json::Value) -> bool {
     pre_tool_use_array.retain(|entry| {
         if let Some(hooks_array) = entry.get("hooks").and_then(|h| h.as_array()) {
             for hook in hooks_array {
-                if let Some(command) = hook.get("command").and_then(|c| c.as_str()) {
-                    if command.contains(REWRITE_HOOK_FILE) {
-                        return false;
-                    }
+                if let Some(command) = hook.get("command").and_then(|c| c.as_str())
+                    && command.contains(REWRITE_HOOK_FILE)
+                {
+                    return false;
                 }
             }
         }
@@ -318,7 +318,9 @@ fn remove_hook_from_settings(verbose: u8) -> Result<bool> {
 /// Full uninstall for Claude Code artifacts.
 pub fn uninstall(global: bool, verbose: u8) -> Result<()> {
     if !global {
-        anyhow::bail!("Uninstall only works with --global flag. For local projects, manually remove RTK from CLAUDE.md");
+        anyhow::bail!(
+            "Uninstall only works with --global flag. For local projects, manually remove RTK from CLAUDE.md"
+        );
     }
 
     let claude_dir = resolve_claude_dir()?;
@@ -1028,11 +1030,13 @@ mod tests {
 
         // Should create full structure
         assert!(json_content.get("hooks").is_some());
-        assert!(json_content
-            .get("hooks")
-            .unwrap()
-            .get("PreToolUse")
-            .is_some());
+        assert!(
+            json_content
+                .get("hooks")
+                .unwrap()
+                .get("PreToolUse")
+                .is_some()
+        );
 
         let pre_tool_use = json_content["hooks"]["PreToolUse"].as_array().unwrap();
         assert_eq!(pre_tool_use.len(), 1);

@@ -368,11 +368,10 @@ fn filter_cargo_nextest(output: &str) -> String {
 
         // Parse binary count from Starting line
         if trimmed.starts_with("Starting") {
-            if let Some(caps) = starting_re.captures(trimmed) {
-                if let Some(m) = caps.get(1) {
+            if let Some(caps) = starting_re.captures(trimmed)
+                && let Some(m) = caps.get(1) {
                     binaries = m.as_str().parse().unwrap_or(0);
                 }
-            }
             continue;
         }
 
@@ -805,13 +804,11 @@ fn filter_cargo_test(output: &str) -> String {
         }
 
         // If all lines parsed successfully and we have at least one suite, return compact format
-        if all_parsed {
-            if let Some(agg) = aggregated {
-                if agg.suites > 0 {
+        if all_parsed
+            && let Some(agg) = aggregated
+                && agg.suites > 0 {
                     return agg.format_compact();
                 }
-            }
-        }
 
         // Fallback: use original behavior if regex failed
         for line in &summary_lines {

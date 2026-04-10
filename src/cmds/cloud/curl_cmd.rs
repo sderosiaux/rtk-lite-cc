@@ -46,14 +46,12 @@ fn filter_curl_output(output: &str) -> String {
     // Try JSON detection: starts with { or [
     if (trimmed.starts_with('{') || trimmed.starts_with('['))
         && (trimmed.ends_with('}') || trimmed.ends_with(']'))
-    {
-        if let Ok(schema) = json_cmd::filter_json_string(trimmed, 5) {
+        && let Ok(schema) = json_cmd::filter_json_string(trimmed, 5) {
             // Only use schema if it's actually shorter than the original (#297)
             if schema.len() <= trimmed.len() {
                 return schema;
             }
         }
-    }
 
     // Not JSON: truncate long output
     let lines: Vec<&str> = trimmed.lines().collect();

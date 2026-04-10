@@ -1,14 +1,13 @@
 [package]
-name = "rtk"
-version = "0.35.0"
-edition = "2021"
-authors = ["Patrick Szymkowiak"]
-description = "Rust Token Killer - High-performance CLI proxy to minimize LLM token consumption"
+name = "rtk-lite-cc"
+version = "0.1.0"
+edition = "2024"
+authors = ["Stephane Derosiaux"]
+description = "Lightweight CLI proxy for Claude Code — minimizes LLM token consumption by filtering command outputs"
 license = "MIT"
-homepage = "https://www.rtk-ai.app"
-repository = "https://github.com/rtk-ai/rtk"
+repository = "https://github.com/sderosiaux/rtk-lite-cc"
 readme = "README.md"
-keywords = ["cli", "llm", "token", "filter", "productivity"]
+keywords = ["cli", "llm", "token", "claude", "proxy"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
@@ -47,8 +46,8 @@ strip = true
 
 # cargo-deb configuration
 [package.metadata.deb]
-maintainer = "Patrick Szymkowiak"
-copyright = "2024 Patrick Szymkowiak"
+maintainer = "Stephane Derosiaux"
+copyright = "2025 Stephane Derosiaux"
 license-file = ["LICENSE", "0"]
 extended-description = "rtk filters and compresses command outputs before they reach your LLM context, saving 60-90% of tokens."
 section = "utility"

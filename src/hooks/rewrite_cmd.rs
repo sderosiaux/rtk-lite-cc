@@ -1,6 +1,6 @@
 //! Translates a raw shell command into its RTK-optimized equivalent.
 
-use super::permissions::{check_command, PermissionVerdict};
+use super::permissions::{PermissionVerdict, check_command};
 use crate::discover::registry;
 use std::io::Write;
 

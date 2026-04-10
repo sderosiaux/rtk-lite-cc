@@ -3,7 +3,7 @@
 use lazy_static::lazy_static;
 use regex::{Regex, RegexSet};
 
-use super::lexer::{tokenize, TokenKind};
+use super::lexer::{TokenKind, tokenize};
 use super::rules::{IGNORED_EXACT, IGNORED_PREFIXES, RULES};
 
 /// Result of classifying a command.
@@ -367,11 +367,7 @@ fn rewrite_compound(cmd: &str, excluded: &[String]) -> Option<String> {
     }
     result.push_str(&rewritten);
 
-    if any_changed {
-        Some(result)
-    } else {
-        None
-    }
+    if any_changed { Some(result) } else { None }
 }
 
 fn rewrite_line_range(cmd: &str) -> Option<String> {
@@ -1085,10 +1081,10 @@ mod tests {
             .ok()
             .and_then(|p| std::fs::metadata(p).ok())
             .and_then(|m| m.modified().ok());
-        if let (Some(rtk_t), Some(test_t)) = (rtk_mtime, test_mtime) {
-            if rtk_t < test_t {
-                return;
-            }
+        if let (Some(rtk_t), Some(test_t)) = (rtk_mtime, test_mtime)
+            && rtk_t < test_t
+        {
+            return;
         }
 
         let output = std::process::Command::new(&rtk_bin)

@@ -2,11 +2,11 @@
 
 use super::constants::PRE_TOOL_USE_KEY;
 use anyhow::{Context, Result};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::io::{self, Read};
 
 use crate::discover::registry::rewrite_command;
-use crate::hooks::permissions::{check_command, PermissionVerdict};
+use crate::hooks::permissions::{PermissionVerdict, check_command};
 
 /// Run the Claude Code preToolUse hook.
 pub fn run_claude_hook() -> Result<()> {

@@ -1,124 +1,83 @@
 #!/usr/bin/env sh
-# rtk installer - https://github.com/rtk-ai/rtk
-# Usage: curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh
+# rtk-lite-cc installer
+# Usage: curl -fsSL https://raw.githubusercontent.com/sderosiaux/rtk-lite-cc/master/install.sh | sh
 
 set -e
 
-REPO="rtk-ai/rtk"
+REPO="sderosiaux/rtk-lite-cc"
 BINARY_NAME="rtk"
 INSTALL_DIR="${RTK_INSTALL_DIR:-$HOME/.local/bin}"
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+info() { printf "\033[0;32m[info]\033[0m %s\n" "$1"; }
+warn() { printf "\033[1;33m[warn]\033[0m %s\n" "$1"; }
+error() { printf "\033[0;31m[error]\033[0m %s\n" "$1"; exit 1; }
 
-info() {
-    printf "${GREEN}[INFO]${NC} %s\n" "$1"
-}
-
-warn() {
-    printf "${YELLOW}[WARN]${NC} %s\n" "$1"
-}
-
-error() {
-    printf "${RED}[ERROR]${NC} %s\n" "$1"
-    exit 1
-}
-
-# Detect OS
-detect_os() {
+detect_platform() {
     case "$(uname -s)" in
         Linux*)  OS="linux";;
         Darwin*) OS="darwin";;
-        *)       error "Unsupported operating system: $(uname -s)";;
+        *)       error "Unsupported OS: $(uname -s)";;
     esac
-}
-
-# Detect architecture
-detect_arch() {
     case "$(uname -m)" in
         x86_64|amd64)  ARCH="x86_64";;
         arm64|aarch64) ARCH="aarch64";;
-        *)             error "Unsupported architecture: $(uname -m)";;
+        *)             error "Unsupported arch: $(uname -m)";;
     esac
 }
 
-# Get latest release version
-get_latest_version() {
-    VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-    if [ -z "$VERSION" ]; then
-        error "Failed to get latest version"
-    fi
-}
-
-# Build target triple
 get_target() {
     case "$OS" in
         linux)
             case "$ARCH" in
                 x86_64)  TARGET="x86_64-unknown-linux-musl";;
                 aarch64) TARGET="aarch64-unknown-linux-gnu";;
-            esac
-            ;;
-        darwin)
-            TARGET="${ARCH}-apple-darwin"
-            ;;
+            esac;;
+        darwin) TARGET="${ARCH}-apple-darwin";;
     esac
 }
 
-# Download and install
-install() {
-    info "Detected: $OS $ARCH"
-    info "Target: $TARGET"
-    info "Version: $VERSION"
-
-    DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY_NAME}-${TARGET}.tar.gz"
-    TEMP_DIR=$(mktemp -d)
-    ARCHIVE="${TEMP_DIR}/${BINARY_NAME}.tar.gz"
-
-    info "Downloading from: $DOWNLOAD_URL"
-    if ! curl -fsSL "$DOWNLOAD_URL" -o "$ARCHIVE"; then
-        error "Failed to download binary"
-    fi
-
-    info "Extracting..."
-    tar -xzf "$ARCHIVE" -C "$TEMP_DIR"
-
-    mkdir -p "$INSTALL_DIR"
-    mv "${TEMP_DIR}/${BINARY_NAME}" "${INSTALL_DIR}/"
-
-    chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
-
-    # Cleanup
-    rm -rf "$TEMP_DIR"
-
-    info "Successfully installed ${BINARY_NAME} to ${INSTALL_DIR}/${BINARY_NAME}"
+get_latest_version() {
+    VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    [ -z "$VERSION" ] && error "Failed to get latest version"
 }
 
-# Verify installation
+install() {
+    info "Platform: $OS $ARCH ($TARGET)"
+    info "Version: $VERSION"
+
+    URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY_NAME}-${TARGET}.tar.gz"
+    TMP=$(mktemp -d)
+
+    info "Downloading $URL"
+    curl -fsSL "$URL" -o "$TMP/rtk.tar.gz" || error "Download failed"
+
+    tar -xzf "$TMP/rtk.tar.gz" -C "$TMP"
+    mkdir -p "$INSTALL_DIR"
+    mv "$TMP/$BINARY_NAME" "$INSTALL_DIR/"
+    chmod +x "$INSTALL_DIR/$BINARY_NAME"
+    rm -rf "$TMP"
+
+    info "Installed to $INSTALL_DIR/$BINARY_NAME"
+}
+
 verify() {
     if command -v "$BINARY_NAME" >/dev/null 2>&1; then
-        info "Verification: $($BINARY_NAME --version)"
+        info "Installed: $($BINARY_NAME --version)"
     else
-        warn "Binary installed but not in PATH. Add to your shell profile:"
+        warn "Not in PATH. Add to your shell profile:"
         warn "  export PATH=\"\$HOME/.local/bin:\$PATH\""
     fi
 }
 
 main() {
-    info "Installing $BINARY_NAME..."
-
-    detect_os
-    detect_arch
+    info "Installing rtk-lite-cc..."
+    detect_platform
     get_target
     get_latest_version
     install
     verify
-
     echo ""
-    info "Installation complete! Run '$BINARY_NAME --help' to get started."
+    info "Done. Run 'rtk init -g' to set up Claude Code integration."
 }
 
 main

@@ -459,10 +459,10 @@ pub fn apply_filter(filter: &CompiledFilter, stdout: &str) -> String {
         let blob = lines.join("\n");
         for rule in &filter.match_output {
             if rule.pattern.is_match(&blob) {
-                if let Some(ref unless_re) = rule.unless {
-                    if unless_re.is_match(&blob) {
-                        continue; // errors/warnings present — skip this rule
-                    }
+                if let Some(ref unless_re) = rule.unless
+                    && unless_re.is_match(&blob)
+                {
+                    continue; // errors/warnings present — skip this rule
                 }
                 return rule.message.clone();
             }
@@ -498,29 +498,29 @@ pub fn apply_filter(filter: &CompiledFilter, stdout: &str) -> String {
             lines.truncate(head);
             lines.push(format!("... ({} lines omitted)", total - head));
         }
-    } else if let Some(tail) = filter.tail_lines {
-        if total > tail {
-            let omitted = total - tail;
-            lines = lines[omitted..].to_vec();
-            lines.insert(0, format!("... ({} lines omitted)", omitted));
-        }
+    } else if let Some(tail) = filter.tail_lines
+        && total > tail
+    {
+        let omitted = total - tail;
+        lines = lines[omitted..].to_vec();
+        lines.insert(0, format!("... ({} lines omitted)", omitted));
     }
 
     // 7. max_lines — absolute cap applied after head/tail (includes omit messages)
-    if let Some(max) = filter.max_lines {
-        if lines.len() > max {
-            let truncated = lines.len() - max;
-            lines.truncate(max);
-            lines.push(format!("... ({} lines truncated)", truncated));
-        }
+    if let Some(max) = filter.max_lines
+        && lines.len() > max
+    {
+        let truncated = lines.len() - max;
+        lines.truncate(max);
+        lines.push(format!("... ({} lines truncated)", truncated));
     }
 
     // 8. on_empty
     let result = lines.join("\n");
-    if result.trim().is_empty() {
-        if let Some(ref msg) = filter.on_empty {
-            return msg.clone();
-        }
+    if result.trim().is_empty()
+        && let Some(ref msg) = filter.on_empty
+    {
+        return msg.clone();
     }
 
     result
@@ -617,10 +617,10 @@ fn collect_test_outcomes(
 
     // Run tests
     for (filter_name, tests) in file.tests {
-        if let Some(name) = filter_name_opt {
-            if filter_name != name {
-                continue;
-            }
+        if let Some(name) = filter_name_opt
+            && filter_name != name
+        {
+            continue;
         }
 
         tested_filter_names.insert(filter_name.clone());

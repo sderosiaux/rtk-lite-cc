@@ -425,33 +425,26 @@ fn parse_user_limit(args: &[String]) -> Option<usize> {
         if arg.starts_with('-')
             && arg.len() > 1
             && arg.chars().nth(1).is_some_and(|c| c.is_ascii_digit())
-        {
-            if let Ok(n) = arg[1..].parse::<usize>() {
+            && let Ok(n) = arg[1..].parse::<usize>() {
                 return Some(n);
             }
-        }
         // -n 20 (two-token form)
-        if arg == "-n" {
-            if let Some(next) = iter.next() {
-                if let Ok(n) = next.parse::<usize>() {
+        if arg == "-n"
+            && let Some(next) = iter.next()
+                && let Ok(n) = next.parse::<usize>() {
                     return Some(n);
                 }
-            }
-        }
         // --max-count=20
-        if let Some(rest) = arg.strip_prefix("--max-count=") {
-            if let Ok(n) = rest.parse::<usize>() {
+        if let Some(rest) = arg.strip_prefix("--max-count=")
+            && let Ok(n) = rest.parse::<usize>() {
                 return Some(n);
             }
-        }
         // --max-count 20 (two-token form)
-        if arg == "--max-count" {
-            if let Some(next) = iter.next() {
-                if let Ok(n) = next.parse::<usize>() {
+        if arg == "--max-count"
+            && let Some(next) = iter.next()
+                && let Ok(n) = next.parse::<usize>() {
                     return Some(n);
                 }
-            }
-        }
     }
     None
 }
@@ -547,12 +540,11 @@ fn format_status_output(porcelain: &str) -> String {
     let mut output = String::new();
 
     // Parse branch info
-    if let Some(branch_line) = lines.first() {
-        if branch_line.starts_with("##") {
+    if let Some(branch_line) = lines.first()
+        && branch_line.starts_with("##") {
             let branch = branch_line.trim_start_matches("## ");
             output.push_str(&format!("* {}\n", branch));
         }
-    }
 
     // Count changes by type
     let mut staged = 0;

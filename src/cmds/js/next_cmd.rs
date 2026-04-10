@@ -99,11 +99,10 @@ fn filter_next_build(output: &str) -> String {
         }
 
         // Extract build time
-        if line.contains("Compiled") || line.contains("in") {
-            if let Some(time_match) = extract_time(line) {
+        if (line.contains("Compiled") || line.contains("in"))
+            && let Some(time_match) = extract_time(line) {
                 build_time = time_match;
             }
-        }
     }
 
     // Detect if build was skipped (already built)

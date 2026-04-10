@@ -227,11 +227,10 @@ fn parse_summary_line(summary: &str) -> (usize, usize, usize) {
                     if let Ok(n) = words[i - 1].parse::<usize>() {
                         failed = n;
                     }
-                } else if word.contains("skipped") {
-                    if let Ok(n) = words[i - 1].parse::<usize>() {
+                } else if word.contains("skipped")
+                    && let Ok(n) = words[i - 1].parse::<usize>() {
                         skipped = n;
                     }
-                }
             }
         }
     }

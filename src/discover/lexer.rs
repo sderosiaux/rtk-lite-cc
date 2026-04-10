@@ -284,9 +284,11 @@ mod tests {
     #[test]
     fn test_quoted_operator_not_split() {
         let tokens = tokenize(r#"git commit -m "Fix && Bug""#);
-        assert!(!tokens
-            .iter()
-            .any(|t| matches!(t.kind, TokenKind::Operator) && t.value == "&&"));
+        assert!(
+            !tokens
+                .iter()
+                .any(|t| matches!(t.kind, TokenKind::Operator) && t.value == "&&")
+        );
         assert!(tokens.iter().any(|t| t.value.contains("Fix && Bug")));
     }
 
@@ -375,25 +377,31 @@ mod tests {
     #[test]
     fn test_and_operator() {
         let tokens = tokenize("cmd1 && cmd2");
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Operator && t.value == "&&"));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Operator && t.value == "&&")
+        );
     }
 
     #[test]
     fn test_or_operator() {
         let tokens = tokenize("cmd1 || cmd2");
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Operator && t.value == "||"));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Operator && t.value == "||")
+        );
     }
 
     #[test]
     fn test_semicolon() {
         let tokens = tokenize("cmd1 ; cmd2");
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Operator && t.value == ";"));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Operator && t.value == ";")
+        );
     }
 
     #[test]
@@ -547,9 +555,11 @@ mod tests {
     #[test]
     fn test_escaped_glob() {
         let tokens = tokenize("echo \\*.txt");
-        assert!(!tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Shellism && t.value == "*"));
+        assert!(
+            !tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Shellism && t.value == "*")
+        );
     }
 
     #[test]
@@ -561,9 +571,11 @@ mod tests {
     #[test]
     fn test_redirect_append() {
         let tokens = tokenize("cmd >> file");
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Redirect && t.value == ">>"));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Redirect && t.value == ">>")
+        );
     }
 
     #[test]
@@ -575,28 +587,36 @@ mod tests {
     #[test]
     fn test_redirect_stderr() {
         let tokens = tokenize("cmd 2> file");
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Redirect && t.value.starts_with("2>")));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Redirect && t.value.starts_with("2>"))
+        );
     }
 
     #[test]
     fn test_redirect_stderr_no_space() {
         let tokens = tokenize("cmd 2>/dev/null");
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Redirect && t.value == "2>"));
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Arg && t.value == "/dev/null"));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Redirect && t.value == "2>")
+        );
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Arg && t.value == "/dev/null")
+        );
     }
 
     #[test]
     fn test_redirect_dev_null() {
         let tokens = tokenize("cmd > /dev/null");
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Redirect && t.value == ">"));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Redirect && t.value == ">")
+        );
     }
 
     #[test]
@@ -605,49 +625,61 @@ mod tests {
         assert_eq!(tokens.len(), 2);
         assert_eq!(tokens[1].kind, TokenKind::Redirect);
         assert_eq!(tokens[1].value, "2>&1");
-        assert!(!tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Shellism && t.value == "&"));
+        assert!(
+            !tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Shellism && t.value == "&")
+        );
     }
 
     #[test]
     fn test_redirect_1_to_2_single_token() {
         let tokens = tokenize("cmd 1>&2");
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Redirect && t.value == "1>&2"));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Redirect && t.value == "1>&2")
+        );
     }
 
     #[test]
     fn test_redirect_fd_close() {
         let tokens = tokenize("cmd 2>&-");
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Redirect && t.value == "2>&-"));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Redirect && t.value == "2>&-")
+        );
     }
 
     #[test]
     fn test_redirect_shorthand_dup() {
         let tokens = tokenize("cmd >&2");
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Redirect && t.value == ">&2"));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Redirect && t.value == ">&2")
+        );
     }
 
     #[test]
     fn test_redirect_amp_gt() {
         let tokens = tokenize("cmd &>/dev/null");
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Redirect && t.value == "&>"));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Redirect && t.value == "&>")
+        );
     }
 
     #[test]
     fn test_redirect_amp_gt_gt() {
         let tokens = tokenize("cmd &>>/dev/null");
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Redirect && t.value == "&>>"));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Redirect && t.value == "&>>")
+        );
     }
 
     #[test]
@@ -665,61 +697,77 @@ mod tests {
     #[test]
     fn test_redirect_append_to_file() {
         let tokens = tokenize("echo hello >> /tmp/output.txt");
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Redirect && t.value == ">>"));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Redirect && t.value == ">>")
+        );
     }
 
     #[test]
     fn test_redirect_heredoc_marker() {
         let tokens = tokenize("cat <<EOF");
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Redirect && t.value == "<<"));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Redirect && t.value == "<<")
+        );
     }
 
     #[test]
     fn test_redirect_2_to_1_with_pipe() {
         let tokens = tokenize("cargo test 2>&1 | head");
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Redirect && t.value == "2>&1"));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Redirect && t.value == "2>&1")
+        );
         assert!(tokens.iter().any(|t| t.kind == TokenKind::Pipe));
     }
 
     #[test]
     fn test_redirect_2_to_1_with_and() {
         let tokens = tokenize("cargo test 2>&1 && echo done");
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Redirect && t.value == "2>&1"));
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Operator && t.value == "&&"));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Redirect && t.value == "2>&1")
+        );
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Operator && t.value == "&&")
+        );
     }
 
     #[test]
     fn test_exclamation_is_shellism() {
         let tokens = tokenize("if ! grep -q pattern file; then echo missing; fi");
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Shellism && t.value == "!"));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Shellism && t.value == "!")
+        );
     }
 
     #[test]
     fn test_background_job_is_shellism() {
         let tokens = tokenize("sleep 10 &");
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Shellism && t.value == "&"));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Shellism && t.value == "&")
+        );
     }
 
     #[test]
     fn test_background_not_confused_with_amp_redirect() {
         let tokens = tokenize("cargo test &>/dev/null");
-        assert!(!tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Shellism && t.value == "&"));
+        assert!(
+            !tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Shellism && t.value == "&")
+        );
         assert!(tokens.iter().any(|t| t.kind == TokenKind::Redirect));
     }
 
@@ -798,22 +846,30 @@ mod tests {
     #[test]
     fn test_fd_redirect_needs_adjacent_digit() {
         let tokens = tokenize("echo 2 > file");
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Arg && t.value == "2"));
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Redirect && t.value == ">"));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Arg && t.value == "2")
+        );
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Redirect && t.value == ">")
+        );
     }
 
     #[test]
     fn test_fd_redirect_no_space() {
         let tokens = tokenize("echo 2>file");
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Redirect && t.value == "2>"));
-        assert!(tokens
-            .iter()
-            .any(|t| t.kind == TokenKind::Arg && t.value == "file"));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Redirect && t.value == "2>")
+        );
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Arg && t.value == "file")
+        );
     }
 }

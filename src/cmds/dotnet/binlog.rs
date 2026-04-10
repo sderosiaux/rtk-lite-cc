@@ -387,19 +387,17 @@ fn parse_event_record(
             if reader.read_bool()? {
                 skip_build_event_context(reader, file_format_version)?;
             }
-            if let Some(project_file) = read_optional_string(reader, parsed)? {
-                if !project_file.is_empty() {
+            if let Some(project_file) = read_optional_string(reader, parsed)?
+                && !project_file.is_empty() {
                     parsed.project_files.insert(project_file);
                 }
-            }
         }
         RECORD_PROJECT_FINISHED => {
             let _fields = read_event_fields(reader, file_format_version, parsed, false)?;
-            if let Some(project_file) = read_optional_string(reader, parsed)? {
-                if !project_file.is_empty() {
+            if let Some(project_file) = read_optional_string(reader, parsed)?
+                && !project_file.is_empty() {
                     parsed.project_files.insert(project_file);
                 }
-            }
             let _ = reader.read_bool()?;
         }
         RECORD_ERROR | RECORD_WARNING => {

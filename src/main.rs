@@ -1099,11 +1099,7 @@ fn run_cli() -> Result<i32> {
                     had_error = true;
                 }
             }
-            if had_error {
-                1
-            } else {
-                0
-            }
+            if had_error { 1 } else { 0 }
         }
 
         Commands::Smart {
@@ -1684,14 +1680,16 @@ fn run_cli() -> Result<i32> {
             #[cfg(unix)]
             {
                 unsafe extern "C" fn handle_signal(sig: libc::c_int) {
-                    let pid = PROXY_CHILD_PID.load(Ordering::SeqCst);
-                    if pid != 0 {
-                        libc::kill(pid as libc::pid_t, libc::SIGTERM);
-                        libc::waitpid(pid as libc::pid_t, std::ptr::null_mut(), 0);
+                    unsafe {
+                        let pid = PROXY_CHILD_PID.load(Ordering::SeqCst);
+                        if pid != 0 {
+                            libc::kill(pid as libc::pid_t, libc::SIGTERM);
+                            libc::waitpid(pid as libc::pid_t, std::ptr::null_mut(), 0);
+                        }
+                        // Re-raise with default handler so parent sees correct exit status
+                        libc::signal(sig, libc::SIG_DFL);
+                        libc::raise(sig);
                     }
-                    // Re-raise with default handler so parent sees correct exit status
-                    libc::signal(sig, libc::SIG_DFL);
-                    libc::raise(sig);
                 }
                 unsafe {
                     libc::signal(

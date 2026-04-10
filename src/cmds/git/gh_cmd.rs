@@ -388,8 +388,8 @@ fn format_pr_view(json: &Value, ultra_compact: bool) -> String {
 
     out.push_str(&format!("  {}\n", url));
 
-    if let Some(body) = json["body"].as_str() {
-        if !body.is_empty() {
+    if let Some(body) = json["body"].as_str()
+        && !body.is_empty() {
             let body_filtered = filter_markdown_body(body);
             if !body_filtered.is_empty() {
                 out.push('\n');
@@ -398,7 +398,6 @@ fn format_pr_view(json: &Value, ultra_compact: bool) -> String {
                 }
             }
         }
-    }
 
     out
 }
@@ -582,8 +581,8 @@ fn format_issue_view(json: &Value) -> String {
     out.push_str(&format!("  Status: {}\n", state));
     out.push_str(&format!("  URL: {}\n", url));
 
-    if let Some(body) = json["body"].as_str() {
-        if !body.is_empty() {
+    if let Some(body) = json["body"].as_str()
+        && !body.is_empty() {
             let body_filtered = filter_markdown_body(body);
             if !body_filtered.is_empty() {
                 out.push_str("\n  Description:\n");
@@ -592,7 +591,6 @@ fn format_issue_view(json: &Value) -> String {
                 }
             }
         }
-    }
     out
 }
 

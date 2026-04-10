@@ -159,24 +159,22 @@ fn filter_black_output(output: &str) -> String {
                 if part_lower.contains("would be reformatted") {
                     // Parse "X file(s) would be reformatted"
                     for (i, word) in words.iter().enumerate() {
-                        if (word == &"file" || word == &"files") && i > 0 {
-                            if let Ok(count) = words[i - 1].parse::<usize>() {
+                        if (word == &"file" || word == &"files") && i > 0
+                            && let Ok(count) = words[i - 1].parse::<usize>() {
                                 files_would_reformat = count;
                                 break;
                             }
-                        }
                     }
                 }
 
                 if part_lower.contains("would be left unchanged") {
                     // Parse "X file(s) would be left unchanged"
                     for (i, word) in words.iter().enumerate() {
-                        if (word == &"file" || word == &"files") && i > 0 {
-                            if let Ok(count) = words[i - 1].parse::<usize>() {
+                        if (word == &"file" || word == &"files") && i > 0
+                            && let Ok(count) = words[i - 1].parse::<usize>() {
                                 files_unchanged = count;
                                 break;
                             }
-                        }
                     }
                 }
             }
@@ -186,12 +184,11 @@ fn filter_black_output(output: &str) -> String {
         if lower.contains("left unchanged") && !lower.contains("would be") {
             let words: Vec<&str> = trimmed.split_whitespace().collect();
             for (i, word) in words.iter().enumerate() {
-                if (word == &"file" || word == &"files") && i > 0 {
-                    if let Ok(count) = words[i - 1].parse::<usize>() {
+                if (word == &"file" || word == &"files") && i > 0
+                    && let Ok(count) = words[i - 1].parse::<usize>() {
                         files_unchanged = count;
                         break;
                     }
-                }
             }
         }
 

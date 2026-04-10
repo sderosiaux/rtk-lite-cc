@@ -52,11 +52,10 @@ pub fn run_format(args: &[String], verbose: u8) -> Result<i32> {    let (report_
     let filtered =
         format_report_summary_or_raw(report_path.as_deref(), check_mode, &raw, command_started_at);
     println!("{}", filtered);
-    if cleanup_report_path {
-        if let Some(path) = report_path.as_deref() {
+    if cleanup_report_path
+        && let Some(path) = report_path.as_deref() {
             cleanup_temp_file(path);
         }
-    }
 
     Ok(exit_code_from_output(&output, "dotnet"))
 }
@@ -211,11 +210,10 @@ fn run_dotnet_with_binlog(subcommand: &str, args: &[String], verbose: u8) -> Res
 
     println!("{}", output_to_print);
     cleanup_temp_file(&binlog_path);
-    if cleanup_trx_results_dir {
-        if let Some(dir) = trx_results_dir.as_deref() {
+    if cleanup_trx_results_dir
+        && let Some(dir) = trx_results_dir.as_deref() {
             cleanup_temp_dir(dir);
         }
-    }
 
     if verbose > 0 {
         eprintln!("Binlog cleaned up: {}", binlog_path.display());
@@ -284,12 +282,11 @@ fn build_effective_dotnet_format_args(args: &[String], report_path: Option<&Path
         effective.push("--verify-no-changes".to_string());
     }
 
-    if !has_report_arg(args) {
-        if let Some(path) = report_path {
+    if !has_report_arg(args)
+        && let Some(path) = report_path {
             effective.push("--report".to_string());
             effective.push(path.display().to_string());
         }
-    }
 
     effective
 }
@@ -405,11 +402,10 @@ fn merge_test_summary_from_trx(
         }
     }
 
-    if trx_summary.is_none() {
-        if let Some(trx) = fallback_trx_path {
+    if trx_summary.is_none()
+        && let Some(trx) = fallback_trx_path {
             trx_summary = dotnet_trx::parse_trx_file_since(&trx, command_started_at);
         }
-    }
 
     let Some(trx_summary) = trx_summary else {
         return summary;
@@ -472,12 +468,11 @@ fn build_effective_dotnet_args(
                     effective.push("--logger".to_string());
                     effective.push("trx".to_string());
                 }
-                if !has_results_directory_arg(args) {
-                    if let Some(results_dir) = trx_results_dir {
+                if !has_results_directory_arg(args)
+                    && let Some(results_dir) = trx_results_dir {
                         effective.push("--results-directory".to_string());
                         effective.push(results_dir.display().to_string());
                     }
-                }
                 effective.extend(args.iter().cloned());
             }
             TestRunnerMode::MtpNative => {
@@ -572,13 +567,11 @@ fn scan_mtp_kind_in_file(path: &Path) -> MtpProjectKind {
                 );
             }
             Ok(Event::Text(e)) => {
-                if inside_mtp_element {
-                    if let Ok(text) = e.unescape() {
-                        if text.trim().eq_ignore_ascii_case("true") {
+                if inside_mtp_element
+                    && let Ok(text) = e.unescape()
+                        && text.trim().eq_ignore_ascii_case("true") {
                             return MtpProjectKind::VsTestBridge;
                         }
-                    }
-                }
             }
             Ok(Event::End(_)) => inside_mtp_element = false,
             Ok(Event::Eof) => break,
@@ -715,11 +708,10 @@ fn has_trx_logger_arg(args: &[String]) -> bool {
         }
 
         for prefix in ["--logger:", "--logger="] {
-            if let Some(value) = lower.strip_prefix(prefix) {
-                if value == "trx" || value.starts_with("trx;") {
+            if let Some(value) = lower.strip_prefix(prefix)
+                && (value == "trx" || value.starts_with("trx;")) {
                     return true;
                 }
-            }
         }
     }
 
@@ -769,15 +761,14 @@ fn extract_report_arg(args: &[String]) -> Option<PathBuf> {
             continue;
         }
 
-        if let Some((_, value)) = arg.split_once('=') {
-            if arg
+        if let Some((_, value)) = arg.split_once('=')
+            && arg
                 .split('=')
                 .next()
                 .is_some_and(|key| key.eq_ignore_ascii_case("--report"))
             {
                 return Some(PathBuf::from(value));
             }
-        }
     }
 
     None
@@ -804,15 +795,14 @@ fn extract_results_directory_arg(args: &[String]) -> Option<PathBuf> {
             continue;
         }
 
-        if let Some((_, value)) = arg.split_once('=') {
-            if arg
+        if let Some((_, value)) = arg.split_once('=')
+            && arg
                 .split('=')
                 .next()
                 .is_some_and(|key| key.eq_ignore_ascii_case("--results-directory"))
             {
                 return Some(PathBuf::from(value));
             }
-        }
     }
 
     None

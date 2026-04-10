@@ -51,11 +51,10 @@ pub(crate) fn parse_major_version(version_output: &str) -> u32 {
     //   "golangci-lint version 1.59.1"
     //   "golangci-lint has version 2.10.0 built with ..."
     for word in version_output.split_whitespace() {
-        if let Some(major) = word.split('.').next().and_then(|s| s.parse::<u32>().ok()) {
-            if word.contains('.') {
+        if let Some(major) = word.split('.').next().and_then(|s| s.parse::<u32>().ok())
+            && word.contains('.') {
                 return major;
             }
-        }
     }
     1
 }
@@ -221,9 +220,9 @@ pub(crate) fn filter_golangci_json(output: &str, version: u32) -> String {
             result.push_str(&format!("    {} ({})\n", linter, linter_issues.len()));
 
             // v2 only: show first source line for this linter-file group
-            if version >= 2 {
-                if let Some(first_issue) = linter_issues.first() {
-                    if let Some(source_line) = first_issue.source_lines.first() {
+            if version >= 2
+                && let Some(first_issue) = linter_issues.first()
+                    && let Some(source_line) = first_issue.source_lines.first() {
                         let trimmed = source_line.trim();
                         let display = match trimmed.char_indices().nth(80) {
                             Some((i, _)) => &trimmed[..i],
@@ -231,8 +230,6 @@ pub(crate) fn filter_golangci_json(output: &str, version: u32) -> String {
                         };
                         result.push_str(&format!("      → {}\n", display));
                     }
-                }
-            }
         }
     }
 

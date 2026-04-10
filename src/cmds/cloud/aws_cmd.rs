@@ -816,8 +816,8 @@ fn filter_lambda_get(json_str: &str) -> Option<FilterResult> {
 
     // Show layer names if present
     // Layer ARNs use colons: arn:aws:lambda:region:acct:layer:name:version
-    if let Some(layers) = config["Layers"].as_array() {
-        if !layers.is_empty() {
+    if let Some(layers) = config["Layers"].as_array()
+        && !layers.is_empty() {
             let layer_names: Vec<String> = layers
                 .iter()
                 .filter_map(|l| {
@@ -832,7 +832,6 @@ fn filter_lambda_get(json_str: &str) -> Option<FilterResult> {
                 .collect();
             text.push_str(&format!("\n  layers: {}", layer_names.join(", ")));
         }
-    }
 
     Some(FilterResult::new(text))
 }
@@ -956,8 +955,8 @@ fn unwrap_dynamodb_value(val: &Value, depth: usize) -> Value {
     }
 
     if let Some(obj) = val.as_object() {
-        if obj.len() == 1 {
-            if let Some((key, inner)) = obj.iter().next() {
+        if obj.len() == 1
+            && let Some((key, inner)) = obj.iter().next() {
                 match key.as_str() {
                     "S" | "B" => return inner.clone(),
                     "N" => {
@@ -966,11 +965,10 @@ fn unwrap_dynamodb_value(val: &Value, depth: usize) -> Value {
                             if let Ok(n) = s.parse::<i64>() {
                                 return Value::Number(n.into());
                             }
-                            if let Ok(f) = s.parse::<f64>() {
-                                if let Some(n) = serde_json::Number::from_f64(f) {
+                            if let Ok(f) = s.parse::<f64>()
+                                && let Some(n) = serde_json::Number::from_f64(f) {
                                     return Value::Number(n);
                                 }
-                            }
                             return Value::String(s.to_string());
                         }
                         return inner.clone();
@@ -1020,7 +1018,6 @@ fn unwrap_dynamodb_value(val: &Value, depth: usize) -> Value {
                     _ => {}
                 }
             }
-        }
         // Not a DynamoDB type wrapper — unwrap each field as a potential item
         let unwrapped: serde_json::Map<String, Value> = obj
             .iter()
@@ -1045,11 +1042,10 @@ fn filter_dynamodb_items(json_str: &str) -> Option<FilterResult> {
     lines.push(format!("Count: {}/{}", count, scanned));
 
     // Show ConsumedCapacity if present
-    if let Some(capacity) = v["ConsumedCapacity"].as_object() {
-        if let Some(units) = capacity["CapacityUnits"].as_f64() {
+    if let Some(capacity) = v["ConsumedCapacity"].as_object()
+        && let Some(units) = capacity["CapacityUnits"].as_f64() {
             lines.push(format!("Capacity: {} RCU", units));
         }
-    }
 
     // Show pagination status if LastEvaluatedKey exists
     if v["LastEvaluatedKey"].is_object() {
@@ -1307,11 +1303,10 @@ fn filter_dynamodb_get_item(json_str: &str) -> Option<FilterResult> {
     }
 
     // Show ConsumedCapacity if present
-    if let Some(capacity) = v["ConsumedCapacity"].as_object() {
-        if let Some(units) = capacity["CapacityUnits"].as_f64() {
+    if let Some(capacity) = v["ConsumedCapacity"].as_object()
+        && let Some(units) = capacity["CapacityUnits"].as_f64() {
             lines.push(format!("Capacity: {} RCU", units));
         }
-    }
 
     if lines.is_empty() {
         return None;
