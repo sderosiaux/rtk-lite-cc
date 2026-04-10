@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm -rf Formula/)",
+      "Bash(rm -rf hooks/cline/ hooks/codex/ hooks/copilot/ hooks/cursor/ hooks/opencode/ hooks/windsurf/)",
+      "Bash(rm -f hooks/README.md)",
+      "Bash(rm -rf .claude/agents/ .claude/commands/ .claude/skills/ .claude/hooks/rtk-suggest.sh .claude/rules/)",
+      "Bash(rm -f hooks/claude/README.md hooks/claude/rtk-awareness.md hooks/claude/test-rtk-rewrite.sh)"
+    ]
+  }
+}
