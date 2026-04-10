@@ -19,7 +19,8 @@ Here's what got cut (~12,000 lines removed):
 | Learn module (CLI correction detection) | Same |
 | Tee system (raw output saved to disk on failure) | Noise. If I need raw output, I run the command directly |
 | Gemini, Copilot, Cursor, Windsurf, Cline, Codex, OpenCode support | Claude Code only |
-| Legacy `--claude-md` injection mode (137-line block in CLAUDE.md) | Modern hook-based approach is the default now |
+| Legacy `--claude-md` injection mode (137-line block in CLAUDE.md) | Hook-based approach doesn't need it |
+| RTK.md / CLAUDE.md patching | The hook is transparent -- Claude doesn't need to know RTK exists |
 | `colored` crate (terminal colors for analytics display) | Analytics is gone, so this goes too |
 | `getrandom`, `hostname` crates | Telemetry-only dependencies |
 
@@ -59,11 +60,15 @@ cargo install --git https://github.com/sderosiaux/rtk-lite-cc
 Then set up the Claude Code hook:
 
 ```bash
-rtk init -g              # hook + RTK.md + settings.json patch
+rtk init -g              # install hook + patch settings.json
 rtk init -g --auto-patch # same, no prompt
 ```
 
-This installs `~/.claude/hooks/rtk-rewrite.sh` and patches `~/.claude/settings.json` so Claude Code routes commands through rtk automatically.
+This does two things:
+1. Installs `~/.claude/hooks/rtk-rewrite.sh` (the hook script)
+2. Adds a PreToolUse entry in `~/.claude/settings.json`
+
+That's it. No CLAUDE.md modification, no RTK.md, no instruction injection. Claude Code doesn't know RTK exists -- the hook silently rewrites commands before execution.
 
 ## Usage
 

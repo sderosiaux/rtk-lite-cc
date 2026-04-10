@@ -14,9 +14,6 @@ use super::integrity;
 // Embedded hook script (guards before set -euo pipefail)
 const REWRITE_HOOK: &str = include_str!("../../hooks/claude/rtk-rewrite.sh");
 
-// Embedded slim RTK awareness instructions
-const RTK_SLIM: &str = include_str!("../../hooks/claude/rtk-awareness.md");
-
 /// Template written by `rtk init` when no filters.toml exists yet.
 const FILTERS_TEMPLATE: &str = r#"# Project-local RTK filters — commit this file with your repo.
 # Filters here override user-global and built-in filters.
@@ -48,10 +45,6 @@ schema_version = 1
 # max_lines = 40
 "#;
 
-const RTK_MD: &str = "RTK.md";
-const CLAUDE_MD: &str = "CLAUDE.md";
-const RTK_MD_REF: &str = "@RTK.md";
-
 /// Control flow for settings.json patching
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PatchMode {
@@ -70,15 +63,9 @@ pub enum PatchResult {
 }
 
 /// Main entry point for `rtk init`
-pub fn run(global: bool, hook_only: bool, patch_mode: PatchMode, verbose: u8) -> Result<()> {
-    if hook_only {
-        run_hook_only_mode(global, patch_mode, verbose)?;
-    } else {
-        run_default_mode(global, patch_mode, verbose)?;
-    }
-
+pub fn run(global: bool, _hook_only: bool, patch_mode: PatchMode, verbose: u8) -> Result<()> {
+    run_default_mode(global, patch_mode, verbose)?;
     println!();
-
     Ok(())
 }
 
@@ -136,35 +123,6 @@ fn ensure_hook_installed(hook_path: &Path, verbose: u8) -> Result<bool> {
     }
 
     Ok(changed)
-}
-
-/// Idempotent file write: create or update if content differs
-fn write_if_changed(path: &Path, content: &str, name: &str, verbose: u8) -> Result<bool> {
-    if path.exists() {
-        let existing = fs::read_to_string(path)
-            .with_context(|| format!("Failed to read {}: {}", name, path.display()))?;
-
-        if existing == content {
-            if verbose > 0 {
-                eprintln!("{} already up to date: {}", name, path.display());
-            }
-            Ok(false)
-        } else {
-            fs::write(path, content)
-                .with_context(|| format!("Failed to write {}: {}", name, path.display()))?;
-            if verbose > 0 {
-                eprintln!("Updated {}: {}", name, path.display());
-            }
-            Ok(true)
-        }
-    } else {
-        fs::write(path, content)
-            .with_context(|| format!("Failed to write {}: {}", name, path.display()))?;
-        if verbose > 0 {
-            eprintln!("Created {}: {}", name, path.display());
-        }
-        Ok(true)
-    }
 }
 
 /// Atomic write using tempfile + rename
@@ -318,9 +276,7 @@ fn remove_hook_from_settings(verbose: u8) -> Result<bool> {
 /// Full uninstall for Claude Code artifacts.
 pub fn uninstall(global: bool, verbose: u8) -> Result<()> {
     if !global {
-        anyhow::bail!(
-            "Uninstall only works with --global flag. For local projects, manually remove RTK from CLAUDE.md"
-        );
+        anyhow::bail!("Uninstall only works with --global flag.");
     }
 
     let claude_dir = resolve_claude_dir()?;
@@ -334,43 +290,12 @@ pub fn uninstall(global: bool, verbose: u8) -> Result<()> {
         removed.push(format!("Hook: {}", hook_path.display()));
     }
 
-    // 1b. Remove integrity hash file
+    // 2. Remove integrity hash file
     if integrity::remove_hash(&hook_path)? {
         removed.push("Integrity hash: removed".to_string());
     }
 
-    // 2. Remove RTK.md
-    let rtk_md_path = claude_dir.join(RTK_MD);
-    if rtk_md_path.exists() {
-        fs::remove_file(&rtk_md_path)
-            .with_context(|| format!("Failed to remove RTK.md: {}", rtk_md_path.display()))?;
-        removed.push(format!("RTK.md: {}", rtk_md_path.display()));
-    }
-
-    // 3. Remove @RTK.md reference from CLAUDE.md
-    let claude_md_path = claude_dir.join(CLAUDE_MD);
-    if claude_md_path.exists() {
-        let content = fs::read_to_string(&claude_md_path)
-            .with_context(|| format!("Failed to read CLAUDE.md: {}", claude_md_path.display()))?;
-
-        if content.contains(RTK_MD_REF) {
-            let new_content = content
-                .lines()
-                .filter(|line| !line.trim().starts_with(RTK_MD_REF))
-                .collect::<Vec<_>>()
-                .join("\n");
-
-            // Clean up double blanks
-            let cleaned = clean_double_blanks(&new_content);
-
-            fs::write(&claude_md_path, cleaned).with_context(|| {
-                format!("Failed to write CLAUDE.md: {}", claude_md_path.display())
-            })?;
-            removed.push("CLAUDE.md: removed @RTK.md reference".to_string());
-        }
-    }
-
-    // 4. Remove hook entry from settings.json
+    // 3. Remove hook entry from settings.json
     if remove_hook_from_settings(verbose)? {
         removed.push("settings.json: removed RTK hook entry".to_string());
     }
@@ -472,36 +397,6 @@ fn patch_settings_json(hook_path: &Path, mode: PatchMode, verbose: u8) -> Result
     Ok(PatchResult::Patched)
 }
 
-/// Clean up consecutive blank lines (collapse 3+ to 2)
-/// Used when removing @RTK.md line from CLAUDE.md
-fn clean_double_blanks(content: &str) -> String {
-    let lines: Vec<&str> = content.lines().collect();
-    let mut result = Vec::new();
-    let mut i = 0;
-
-    while i < lines.len() {
-        let line = lines[i];
-
-        if line.trim().is_empty() {
-            // Count consecutive blank lines
-            let mut blank_count = 0;
-            while i < lines.len() && lines[i].trim().is_empty() {
-                blank_count += 1;
-                i += 1;
-            }
-
-            // Keep at most 2 blank lines
-            let keep = blank_count.min(2);
-            result.extend(std::iter::repeat_n("", keep));
-        } else {
-            result.push(line);
-            i += 1;
-        }
-    }
-
-    result.join("\n")
-}
-
 /// Deep-merge RTK hook entry into settings.json
 /// Creates hooks.PreToolUse structure if missing, preserves existing hooks
 fn insert_hook_entry(root: &mut serde_json::Value, hook_command: &str) {
@@ -575,36 +470,23 @@ fn run_default_mode(global: bool, patch_mode: PatchMode, verbose: u8) -> Result<
         // Local init: generate project-local filters template only
         generate_project_filters_template(verbose)?;
         println!("\nLocal RTK initialization complete.");
-        println!("  Tip: Add @RTK.md to your project's CLAUDE.md to enable RTK awareness.");
         return Ok(());
     }
-
-    let claude_dir = resolve_claude_dir()?;
-    let rtk_md_path = claude_dir.join(RTK_MD);
-    let claude_md_path = claude_dir.join(CLAUDE_MD);
 
     // 1. Prepare hook directory and install hook
     let (_hook_dir, hook_path) = prepare_hook_paths()?;
     let hook_changed = ensure_hook_installed(&hook_path, verbose)?;
 
-    // 2. Write RTK.md
-    write_if_changed(&rtk_md_path, RTK_SLIM, RTK_MD, verbose)?;
-
-    // 3. Patch CLAUDE.md (add @RTK.md reference)
-    patch_claude_md(&claude_md_path, verbose)?;
-
-    // 4. Print success message
+    // 2. Print success message
     let hook_status = if hook_changed {
         "installed/updated"
     } else {
         "already up to date"
     };
     println!("\nRTK hook {} (global).\n", hook_status);
-    println!("  Hook:      {}", hook_path.display());
-    println!("  RTK.md:    {} (10 lines)", rtk_md_path.display());
-    println!("  CLAUDE.md: @RTK.md reference added");
+    println!("  Hook: {}", hook_path.display());
 
-    // 5. Patch settings.json
+    // 3. Patch settings.json
     let patch_result = patch_settings_json(&hook_path, patch_mode, verbose)?;
 
     // Report result
@@ -620,7 +502,7 @@ fn run_default_mode(global: bool, patch_mode: PatchMode, verbose: u8) -> Result<
         }
     }
 
-    // 6. Generate user-global filters template (~/.config/rtk/filters.toml)
+    // 4. Generate user-global filters template (~/.config/rtk/filters.toml)
     generate_global_filters_template(verbose)?;
 
     println!(); // Final newline
@@ -677,88 +559,6 @@ fn generate_global_filters_template(verbose: u8) -> Result<()> {
     Ok(())
 }
 
-/// Hook-only mode: just the hook, no RTK.md
-#[cfg(not(unix))]
-fn run_hook_only_mode(_global: bool, _patch_mode: PatchMode, _verbose: u8) -> Result<()> {
-    anyhow::bail!("Hook install requires Unix (macOS/Linux). Use WSL or --claude-md mode.")
-}
-
-#[cfg(unix)]
-fn run_hook_only_mode(global: bool, patch_mode: PatchMode, verbose: u8) -> Result<()> {
-    if !global {
-        eprintln!("[warn] Warning: --hook-only only makes sense with --global");
-        eprintln!("    For local projects, use default mode or --claude-md");
-        return Ok(());
-    }
-
-    // Prepare and install hook
-    let (_hook_dir, hook_path) = prepare_hook_paths()?;
-    let hook_changed = ensure_hook_installed(&hook_path, verbose)?;
-
-    let hook_status = if hook_changed {
-        "installed/updated"
-    } else {
-        "already up to date"
-    };
-    println!("\nRTK hook {} (hook-only mode).\n", hook_status);
-    println!("  Hook: {}", hook_path.display());
-    println!(
-        "  Note: No RTK.md created. Claude won't know about meta commands (gain, discover, proxy)."
-    );
-
-    // Patch settings.json
-    let patch_result = patch_settings_json(&hook_path, patch_mode, verbose)?;
-
-    // Report result
-    match patch_result {
-        PatchResult::Patched => {
-            // Already printed by patch_settings_json
-        }
-        PatchResult::AlreadyPresent => {
-            println!("\n  settings.json: hook already present");
-        }
-        PatchResult::Declined | PatchResult::Skipped => {
-            // Manual instructions already printed by patch_settings_json
-        }
-    }
-
-    println!(); // Final newline
-
-    Ok(())
-}
-
-/// Patch CLAUDE.md: add @RTK.md reference
-fn patch_claude_md(path: &Path, verbose: u8) -> Result<()> {
-    let content = if path.exists() {
-        fs::read_to_string(path)?
-    } else {
-        String::new()
-    };
-
-    // Check if @RTK.md already present
-    if content.contains(RTK_MD_REF) {
-        if verbose > 0 {
-            eprintln!("@RTK.md reference already present in CLAUDE.md");
-        }
-        return Ok(());
-    }
-
-    // Add @RTK.md
-    let new_content = if content.is_empty() {
-        "@RTK.md\n".to_string()
-    } else {
-        format!("{}\n\n@RTK.md\n", content.trim())
-    };
-
-    fs::write(path, new_content)?;
-
-    if verbose > 0 {
-        eprintln!("Added @RTK.md reference to CLAUDE.md");
-    }
-
-    Ok(())
-}
-
 fn resolve_home_subdir(subdir: &str) -> Result<PathBuf> {
     dirs::home_dir()
         .map(|h| h.join(subdir))
@@ -777,9 +577,6 @@ pub fn show_config() -> Result<()> {
 fn show_claude_config() -> Result<()> {
     let claude_dir = resolve_claude_dir()?;
     let hook_path = claude_dir.join(HOOKS_SUBDIR).join(REWRITE_HOOK_FILE);
-    let rtk_md_path = claude_dir.join(RTK_MD);
-    let global_claude_md = claude_dir.join(CLAUDE_MD);
-    let local_claude_md = PathBuf::from(CLAUDE_MD);
 
     println!("rtk Configuration:\n");
 
@@ -833,13 +630,6 @@ fn show_claude_config() -> Result<()> {
         println!("[--] Hook: not found");
     }
 
-    // Check RTK.md
-    if rtk_md_path.exists() {
-        println!("[ok] RTK.md: {} (slim mode)", rtk_md_path.display());
-    } else {
-        println!("[--] RTK.md: not found");
-    }
-
     // Check hook integrity
     match integrity::verify_hook_at(&hook_path) {
         Ok(integrity::IntegrityStatus::Verified) => {
@@ -858,30 +648,6 @@ fn show_claude_config() -> Result<()> {
         Err(_) => {
             println!("[warn] Integrity: check failed");
         }
-    }
-
-    // Check global CLAUDE.md
-    if global_claude_md.exists() {
-        let content = fs::read_to_string(&global_claude_md)?;
-        if content.contains(RTK_MD_REF) {
-            println!("[ok] Global (~/.claude/CLAUDE.md): @RTK.md reference");
-        } else {
-            println!("[--] Global (~/.claude/CLAUDE.md): exists but rtk not configured");
-        }
-    } else {
-        println!("[--] Global (~/.claude/CLAUDE.md): not found");
-    }
-
-    // Check local CLAUDE.md
-    if local_claude_md.exists() {
-        let content = fs::read_to_string(&local_claude_md)?;
-        if content.contains("rtk") {
-            println!("[ok] Local (./CLAUDE.md): rtk enabled");
-        } else {
-            println!("[--] Local (./CLAUDE.md): exists but rtk not configured");
-        }
-    } else {
-        println!("[--] Local (./CLAUDE.md): not found");
     }
 
     // Check settings.json
@@ -909,11 +675,10 @@ fn show_claude_config() -> Result<()> {
 
     println!("\nUsage:");
     println!("  rtk init              # Generate local project filters template");
-    println!("  rtk init -g           # Hook + RTK.md + @RTK.md + settings.json (recommended)");
+    println!("  rtk init -g           # Hook + settings.json (recommended)");
     println!("  rtk init -g --auto-patch    # Same as above but no prompt");
     println!("  rtk init -g --no-patch      # Skip settings.json (manual setup)");
     println!("  rtk init -g --uninstall     # Remove all RTK artifacts");
-    println!("  rtk init -g --hook-only     # Hook only, no RTK.md");
 
     Ok(())
 }
@@ -935,26 +700,6 @@ mod tests {
             jq_pos < rtk_delegate_pos,
             "Guards must appear before rtk rewrite delegation"
         );
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn test_default_mode_creates_hook_and_rtk_md() {
-        let temp = TempDir::new().unwrap();
-        let hook_path = temp.path().join("rtk-rewrite.sh");
-        let rtk_md_path = temp.path().join("RTK.md");
-
-        fs::write(&hook_path, REWRITE_HOOK).unwrap();
-        fs::write(&rtk_md_path, RTK_SLIM).unwrap();
-
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&hook_path, fs::Permissions::from_mode(0o755)).unwrap();
-
-        assert!(hook_path.exists());
-        assert!(rtk_md_path.exists());
-
-        let metadata = fs::metadata(&hook_path).unwrap();
-        assert!(metadata.permissions().mode() & 0o111 != 0);
     }
 
     // Tests for hook_already_present()
@@ -1124,25 +869,6 @@ mod tests {
         assert!(serialized.contains("\"env\""));
         assert!(serialized.contains("\"permissions\""));
         assert!(serialized.contains("\"model\""));
-    }
-
-    // Tests for clean_double_blanks()
-    #[test]
-    fn test_clean_double_blanks() {
-        // Input: line1, 2 blank lines, line2, 1 blank line, line3, 3 blank lines, line4
-        // Expected: line1, 2 blank lines (kept), line2, 1 blank line, line3, 2 blank lines (max), line4
-        let input = "line1\n\n\nline2\n\nline3\n\n\n\nline4";
-        // That's: line1 \n \n \n line2 \n \n line3 \n \n \n \n line4
-        // Which is: line1, blank, blank, line2, blank, line3, blank, blank, blank, line4
-        // So 2 blanks after line1 (keep both), 1 blank after line2 (keep), 3 blanks after line3 (keep 2)
-        let expected = "line1\n\n\nline2\n\nline3\n\n\nline4";
-        assert_eq!(clean_double_blanks(input), expected);
-    }
-
-    #[test]
-    fn test_clean_double_blanks_preserves_single() {
-        let input = "line1\n\nline2\n\nline3";
-        assert_eq!(clean_double_blanks(input), input); // No change
     }
 
     // Tests for remove_hook_from_settings()
