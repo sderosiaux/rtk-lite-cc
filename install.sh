@@ -38,10 +38,10 @@ get_target() {
 
 get_latest_version() {
     VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-    [ -z "$VERSION" ] && error "Failed to get latest version"
+    if [ -z "$VERSION" ]; then error "Failed to get latest version"; fi
 }
 
-install() {
+do_install() {
     info "Platform: $OS $ARCH ($TARGET)"
     info "Version: $VERSION"
 
@@ -74,7 +74,7 @@ main() {
     detect_platform
     get_target
     get_latest_version
-    install
+    do_install
     verify
     echo ""
     info "Done. Run 'rtk init -g' to set up Claude Code integration."
