@@ -1,15 +1,12 @@
 //! Runs curl and auto-compresses JSON responses.
 
-use crate::core::tracking;
 use crate::core::utils::{exit_code_from_output, resolved_command, truncate};
 use crate::json_cmd;
 use anyhow::{Context, Result};
 
 /// Not using run_filtered: on failure, curl can return HTML error pages (404, 500)
 /// that the JSON schema filter would mangle. The early exit skips filtering entirely.
-pub fn run(args: &[String], verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-    let mut cmd = resolved_command("curl");
+pub fn run(args: &[String], verbose: u8) -> Result<i32> {    let mut cmd = resolved_command("curl");
     cmd.arg("-s"); // Silent mode (no progress bar)
 
     for arg in args {
@@ -35,19 +32,11 @@ pub fn run(args: &[String], verbose: u8) -> Result<i32> {
         return Ok(exit_code_from_output(&output, "curl"));
     }
 
-    let raw = stdout.to_string();
+    let _raw = stdout.to_string();
 
     // Auto-detect JSON and pipe through filter
     let filtered = filter_curl_output(&stdout);
     println!("{}", filtered);
-
-    timer.track(
-        &format!("curl {}", args.join(" ")),
-        &format!("rtk curl {}", args.join(" ")),
-        &raw,
-        &filtered,
-    );
-
     Ok(0)
 }
 

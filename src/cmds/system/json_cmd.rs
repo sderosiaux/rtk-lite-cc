@@ -1,6 +1,5 @@
 //! Inspects JSON structure without showing values, saving tokens on large payloads.
 
-use crate::core::tracking;
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
 use std::fs;
@@ -38,8 +37,6 @@ fn validate_json_extension(file: &Path) -> Result<()> {
 /// Show JSON (compact with values, or schema-only with --schema)
 pub fn run(file: &Path, max_depth: usize, schema_only: bool, verbose: u8) -> Result<()> {
     validate_json_extension(file)?;
-    let timer = tracking::TimedExecution::start();
-
     if verbose > 0 {
         eprintln!("Analyzing JSON: {}", file.display());
     }
@@ -52,20 +49,11 @@ pub fn run(file: &Path, max_depth: usize, schema_only: bool, verbose: u8) -> Res
     } else {
         filter_json_compact(&content, max_depth)?
     };
-    println!("{}", output);
-    timer.track(
-        &format!("cat {}", file.display()),
-        "rtk json",
-        &content,
-        &output,
-    );
-    Ok(())
+    println!("{}", output);    Ok(())
 }
 
 /// Show JSON from stdin
 pub fn run_stdin(max_depth: usize, schema_only: bool, verbose: u8) -> Result<()> {
-    let timer = tracking::TimedExecution::start();
-
     if verbose > 0 {
         eprintln!("Analyzing JSON from stdin");
     }
@@ -81,9 +69,7 @@ pub fn run_stdin(max_depth: usize, schema_only: bool, verbose: u8) -> Result<()>
     } else {
         filter_json_compact(&content, max_depth)?
     };
-    println!("{}", output);
-    timer.track("cat - (stdin)", "rtk json -", &content, &output);
-    Ok(())
+    println!("{}", output);    Ok(())
 }
 
 /// Parse a JSON string and return compact representation with values preserved.

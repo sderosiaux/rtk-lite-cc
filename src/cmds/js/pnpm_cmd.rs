@@ -1,6 +1,5 @@
 //! Filters pnpm output — dependency trees, install logs, outdated packages.
 
-use crate::core::tracking;
 use crate::core::utils::resolved_command;
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -294,8 +293,6 @@ pub fn run(cmd: PnpmCommand, args: &[String], verbose: u8) -> Result<i32> {
 }
 
 fn run_list(depth: usize, args: &[String], verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
     let mut cmd = resolved_command("pnpm");
     cmd.arg("list");
     cmd.arg(format!("--depth={}", depth));
@@ -339,20 +336,10 @@ fn run_list(depth: usize, args: &[String], verbose: u8) -> Result<i32> {
     };
 
     println!("{}", filtered);
-
-    timer.track(
-        &format!("pnpm list --depth={}", depth),
-        &format!("rtk pnpm list --depth={}", depth),
-        &stdout,
-        &filtered,
-    );
-
     Ok(0)
 }
 
 fn run_outdated(args: &[String], verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
     let mut cmd = resolved_command("pnpm");
     cmd.arg("outdated");
     cmd.arg("--format");
@@ -365,7 +352,7 @@ fn run_outdated(args: &[String], verbose: u8) -> Result<i32> {
     let output = cmd.output().context("Failed to run pnpm outdated")?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let combined = format!("{}{}", stdout, stderr);
+    let _combined = format!("{}{}", stdout, stderr);
 
     // Parse output using PnpmOutdatedParser
     let parse_result = PnpmOutdatedParser::parse(&stdout);
@@ -395,15 +382,10 @@ fn run_outdated(args: &[String], verbose: u8) -> Result<i32> {
     } else {
         println!("{}", filtered);
     }
-
-    timer.track("pnpm outdated", "rtk pnpm outdated", &combined, &filtered);
-
     Ok(0)
 }
 
 fn run_install(packages: &[String], args: &[String], verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
     // Validate package names to prevent command injection
     for pkg in packages {
         if !is_valid_package_name(pkg) {
@@ -442,14 +424,6 @@ fn run_install(packages: &[String], args: &[String], verbose: u8) -> Result<i32>
     let filtered = filter_pnpm_install(&combined);
 
     println!("{}", filtered);
-
-    timer.track(
-        &format!("pnpm install {}", packages.join(" ")),
-        &format!("rtk pnpm install {}", packages.join(" ")),
-        &combined,
-        &filtered,
-    );
-
     Ok(0)
 }
 

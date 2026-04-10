@@ -1,6 +1,5 @@
 //! Filters Prisma CLI output by stripping ASCII art and verbose decoration.
 
-use crate::core::tracking;
 use crate::core::utils::{resolved_command, tool_exists};
 use anyhow::{Context, Result};
 use std::process::Command;
@@ -39,8 +38,6 @@ fn create_prisma_command() -> Command {
 }
 
 fn run_generate(args: &[String], verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
     let mut cmd = create_prisma_command();
     cmd.arg("generate");
 
@@ -67,21 +64,15 @@ fn run_generate(args: &[String], verbose: u8) -> Result<i32> {
         }
         if !stderr.trim().is_empty() {
             eprint!("{}", stderr);
-        }
-        timer.track("prisma generate", "rtk prisma generate", &raw, &raw);
-        return Ok(exit_code);
+        }        return Ok(exit_code);
     }
 
     let filtered = filter_prisma_generate(&raw);
     println!("{}", filtered);
-    timer.track("prisma generate", "rtk prisma generate", &raw, &filtered);
-
     Ok(0)
 }
 
 fn run_migrate(subcommand: MigrateSubcommand, args: &[String], verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
     let mut cmd = create_prisma_command();
     cmd.arg("migrate");
 
@@ -124,9 +115,7 @@ fn run_migrate(subcommand: MigrateSubcommand, args: &[String], verbose: u8) -> R
         }
         if !stderr.trim().is_empty() {
             eprint!("{}", stderr);
-        }
-        timer.track(cmd_name, &format!("rtk {}", cmd_name), &raw, &raw);
-        return Ok(exit_code);
+        }        return Ok(exit_code);
     }
 
     let filtered = match subcommand {
@@ -136,14 +125,10 @@ fn run_migrate(subcommand: MigrateSubcommand, args: &[String], verbose: u8) -> R
     };
 
     println!("{}", filtered);
-    timer.track(cmd_name, &format!("rtk {}", cmd_name), &raw, &filtered);
-
     Ok(0)
 }
 
 fn run_db_push(args: &[String], verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
     let mut cmd = create_prisma_command();
     cmd.arg("db").arg("push");
 
@@ -168,15 +153,11 @@ fn run_db_push(args: &[String], verbose: u8) -> Result<i32> {
         }
         if !stderr.trim().is_empty() {
             eprint!("{}", stderr);
-        }
-        timer.track("prisma db push", "rtk prisma db push", &raw, &raw);
-        return Ok(exit_code);
+        }        return Ok(exit_code);
     }
 
     let filtered = filter_db_push(&raw);
     println!("{}", filtered);
-    timer.track("prisma db push", "rtk prisma db push", &raw, &filtered);
-
     Ok(0)
 }
 

@@ -1,4 +1,8 @@
-use super::report::RtkStatus;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RtkStatus {
+    Existing,
+    Passthrough,
+}
 
 pub struct RtkRule {
     pub pattern: &'static str,

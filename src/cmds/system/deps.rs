@@ -1,6 +1,5 @@
 //! Summarizes project dependencies from lock files and manifests.
 
-use crate::core::tracking;
 use anyhow::Result;
 use regex::Regex;
 use std::fs;
@@ -8,8 +7,6 @@ use std::path::Path;
 
 /// Summarize project dependencies
 pub fn run(path: &Path, verbose: u8) -> Result<()> {
-    let timer = tracking::TimedExecution::start();
-
     let dir = if path.is_file() {
         path.parent().unwrap_or(Path::new("."))
     } else {
@@ -68,9 +65,7 @@ pub fn run(path: &Path, verbose: u8) -> Result<()> {
         rtk.push_str(&format!("No dependency files found in {}", dir.display()));
     }
 
-    print!("{}", rtk);
-    timer.track("cat */deps", "rtk deps", &raw, &rtk);
-    Ok(())
+    print!("{}", rtk);    Ok(())
 }
 
 fn summarize_cargo_str(path: &Path) -> Result<String> {

@@ -95,7 +95,7 @@ pub fn run(args: &[String], verbose: u8) -> Result<i32> {
                 filter_rspec_output(stdout)
             }
         },
-        runner::RunOptions::stdout_only().tee("rspec"),
+        runner::RunOptions::stdout_only(),
     )
 }
 

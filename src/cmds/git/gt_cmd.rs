@@ -1,6 +1,5 @@
 //! Filters Graphite (gt) CLI output for stacking workflows.
 
-use crate::core::tracking;
 use crate::core::utils::{
     exit_code_from_output, ok_confirmation, resolved_command, strip_ansi, truncate,
 };
@@ -25,11 +24,9 @@ fn run_gt_filtered(
     subcmd: &[&str],
     args: &[String],
     verbose: u8,
-    tee_label: &str,
+    _tee_label: &str,
     filter_fn: fn(&str) -> String,
 ) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
     let mut cmd = resolved_command("gt");
     for part in subcmd {
         cmd.arg(part);
@@ -52,7 +49,6 @@ fn run_gt_filtered(
 
     let stdout = String::from_utf8_lossy(&cmd_output.stdout);
     let stderr = String::from_utf8_lossy(&cmd_output.stderr);
-    let raw = format!("{}\n{}", stdout, stderr);
 
     let exit_code = exit_code_from_output(&cmd_output, "gt");
 
@@ -63,23 +59,11 @@ fn run_gt_filtered(
         filter_fn(&clean)
     };
 
-    if let Some(hint) = crate::core::tee::tee_and_hint(&raw, tee_label, exit_code) {
-        println!("{}\n{}", output, hint);
-    } else {
-        println!("{}", output);
-    }
+    println!("{}", output);
 
     if !stderr.trim().is_empty() {
         eprintln!("{}", stderr.trim());
     }
-
-    let label = if args.is_empty() {
-        format!("gt {}", subcmd_str)
-    } else {
-        format!("gt {} {}", subcmd_str, args.join(" "))
-    };
-    let rtk_label = format!("rtk {}", label);
-    timer.track(&label, &rtk_label, &raw, &output);
 
     Ok(exit_code)
 }

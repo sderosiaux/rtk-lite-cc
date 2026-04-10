@@ -1,7 +1,6 @@
 //! Filters ESLint and Biome linter output, grouping violations by rule.
 
 use crate::core::config;
-use crate::core::tracking;
 use crate::core::utils::{package_manager_exec, resolved_command, truncate};
 use crate::mypy_cmd;
 use crate::ruff_cmd;
@@ -86,8 +85,6 @@ fn detect_linter(args: &[String]) -> (&str, bool) {
 }
 
 pub fn run(args: &[String], verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
     let skip = strip_pm_prefix(args);
     let effective_args = &args[skip..];
 
@@ -204,23 +201,7 @@ pub fn run(args: &[String], verbose: u8) -> Result<i32> {
         _ => filter_generic_lint(&raw),
     };
 
-    let exit_code = output
-        .status
-        .code()
-        .unwrap_or(if output.status.success() { 0 } else { 1 });
-    if let Some(hint) = crate::core::tee::tee_and_hint(&raw, "lint", exit_code) {
-        println!("{}\n{}", filtered, hint);
-    } else {
-        println!("{}", filtered);
-    }
-
-    timer.track(
-        &format!("{} {}", linter, args.join(" ")),
-        &format!("rtk lint {} {}", linter, args.join(" ")),
-        &raw,
-        &filtered,
-    );
-
+    println!("{}", filtered);
     if !output.status.success() {
         return Ok(crate::core::utils::exit_code_from_output(&output, "eslint"));
     }

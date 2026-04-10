@@ -1,6 +1,5 @@
 //! Filters find results by grouping files by directory.
 
-use crate::core::tracking;
 use anyhow::{Context, Result};
 use ignore::WalkBuilder;
 use std::collections::HashMap;
@@ -199,8 +198,6 @@ pub fn run(
     case_insensitive: bool,
     verbose: u8,
 ) -> Result<()> {
-    let timer = tracking::TimedExecution::start();
-
     // Treat "." as match-all
     let effective_pattern = if pattern == "." { "*" } else { pattern };
 
@@ -271,18 +268,11 @@ pub fn run(
 
     files.sort();
 
-    let raw_output = files.join("\n");
+    let _raw_output = files.join("\n");
 
     if files.is_empty() {
         let msg = format!("0 for '{}'", effective_pattern);
-        println!("{}", msg);
-        timer.track(
-            &format!("find {} -name '{}'", path, effective_pattern),
-            "rtk find",
-            &raw_output,
-            &msg,
-        );
-        return Ok(());
+        println!("{}", msg);        return Ok(());
     }
 
     // Group by directory
@@ -369,14 +359,7 @@ pub fn run(
         println!("{}", ext_line);
     }
 
-    let rtk_output = format!("{}F {}D + {}", total_files, dirs_count, ext_line);
-    timer.track(
-        &format!("find {} -name '{}'", path, effective_pattern),
-        "rtk find",
-        &raw_output,
-        &rtk_output,
-    );
-
+    let _rtk_output = format!("{}F {}D + {}", total_files, dirs_count, ext_line);
     Ok(())
 }
 

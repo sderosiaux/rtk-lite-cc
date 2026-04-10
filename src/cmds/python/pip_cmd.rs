@@ -1,6 +1,5 @@
 //! Filters pip and uv package manager output.
 
-use crate::core::tracking;
 use crate::core::utils::{exit_code_from_output, resolved_command, tool_exists};
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -14,8 +13,6 @@ struct Package {
 }
 
 pub fn run(args: &[String], verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
     // Auto-detect uv vs pip
     let use_uv = tool_exists("uv");
     let base_cmd = if use_uv { "uv" } else { "pip" };
@@ -27,7 +24,7 @@ pub fn run(args: &[String], verbose: u8) -> Result<i32> {
     // Detect subcommand
     let subcommand = args.first().map(|s| s.as_str()).unwrap_or("");
 
-    let (cmd_str, filtered, exit_code) = match subcommand {
+    let (_cmd_str, _filtered, exit_code) = match subcommand {
         "list" => run_list(base_cmd, &args[1..], verbose)?,
         "outdated" => run_outdated(base_cmd, &args[1..], verbose)?,
         "install" | "uninstall" | "show" => {
@@ -39,14 +36,6 @@ pub fn run(args: &[String], verbose: u8) -> Result<i32> {
             run_passthrough(base_cmd, args, verbose)?
         }
     };
-
-    timer.track(
-        &format!("{} {}", base_cmd, args.join(" ")),
-        &format!("rtk {} {}", base_cmd, args.join(" ")),
-        &cmd_str,
-        &filtered,
-    );
-
     Ok(exit_code)
 }
 

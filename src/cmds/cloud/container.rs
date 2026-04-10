@@ -1,7 +1,6 @@
 //! Filters Docker and kubectl output into compact summaries.
 
 use crate::core::runner::{self, RunOptions};
-use crate::core::tracking;
 use crate::core::utils::{exit_code_from_output, resolved_command};
 use anyhow::{Context, Result};
 use serde_json::Value;
@@ -51,9 +50,7 @@ where
 }
 
 fn docker_ps(_verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
-    let raw = resolved_command("docker")
+    let _raw = resolved_command("docker")
         .args(["ps"])
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
@@ -70,9 +67,7 @@ fn docker_ps(_verbose: u8) -> Result<i32> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        eprint!("{}", stderr);
-        timer.track("docker ps", "rtk docker ps", &raw, &raw);
-        return Ok(exit_code_from_output(&output, "docker"));
+        eprint!("{}", stderr);        return Ok(exit_code_from_output(&output, "docker"));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -80,9 +75,7 @@ fn docker_ps(_verbose: u8) -> Result<i32> {
 
     if stdout.trim().is_empty() {
         rtk.push_str("[docker] 0 containers");
-        println!("{}", rtk);
-        timer.track("docker ps", "rtk docker ps", &raw, &rtk);
-        return Ok(0);
+        println!("{}", rtk);        return Ok(0);
     }
 
     let count = stdout.lines().count();
@@ -114,15 +107,11 @@ fn docker_ps(_verbose: u8) -> Result<i32> {
         rtk.push_str(&format!("  ... +{} more", count - 15));
     }
 
-    print!("{}", rtk);
-    timer.track("docker ps", "rtk docker ps", &raw, &rtk);
-    Ok(0)
+    print!("{}", rtk);    Ok(0)
 }
 
 fn docker_images(_verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
-    let raw = resolved_command("docker")
+    let _raw = resolved_command("docker")
         .args(["images"])
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
@@ -135,9 +124,7 @@ fn docker_images(_verbose: u8) -> Result<i32> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        eprint!("{}", stderr);
-        timer.track("docker images", "rtk docker images", &raw, &raw);
-        return Ok(exit_code_from_output(&output, "docker"));
+        eprint!("{}", stderr);        return Ok(exit_code_from_output(&output, "docker"));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -146,9 +133,7 @@ fn docker_images(_verbose: u8) -> Result<i32> {
 
     if lines.is_empty() {
         rtk.push_str("[docker] 0 images");
-        println!("{}", rtk);
-        timer.track("docker images", "rtk docker images", &raw, &rtk);
-        return Ok(0);
+        println!("{}", rtk);        return Ok(0);
     }
 
     let mut total_size_mb: f64 = 0.0;
@@ -195,9 +180,7 @@ fn docker_images(_verbose: u8) -> Result<i32> {
         rtk.push_str(&format!("  ... +{} more", lines.len() - 15));
     }
 
-    print!("{}", rtk);
-    timer.track("docker images", "rtk docker images", &raw, &rtk);
-    Ok(0)
+    print!("{}", rtk);    Ok(0)
 }
 
 fn docker_logs(args: &[String], _verbose: u8) -> Result<i32> {
@@ -529,8 +512,6 @@ pub fn run_docker_passthrough(args: &[OsString], verbose: u8) -> Result<i32> {
 
 /// Run `docker compose ps` with compact output
 pub fn run_compose_ps(verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
     // Raw output for token tracking
     let raw_output = resolved_command("docker")
         .args(["compose", "ps"])
@@ -567,9 +548,7 @@ pub fn run_compose_ps(verbose: u8) -> Result<i32> {
     }
 
     let rtk = format_compose_ps(&structured);
-    println!("{}", rtk);
-    timer.track("docker compose ps", "rtk docker compose ps", &raw, &rtk);
-    Ok(0)
+    println!("{}", rtk);    Ok(0)
 }
 
 pub fn run_compose_logs(service: Option<&str>, verbose: u8) -> Result<i32> {

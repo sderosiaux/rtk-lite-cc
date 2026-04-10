@@ -38,9 +38,7 @@ pub fn run(args: &[String], verbose: u8) -> Result<i32> {
         "psql",
         &args.join(" "),
         filter_psql_output,
-        RunOptions::stdout_only()
-            .tee("psql")
-            .early_exit_on_failure(),
+        RunOptions::stdout_only().early_exit_on_failure(),
     )
 }
 

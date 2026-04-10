@@ -95,7 +95,7 @@ where
         &format!("cargo {}", subcommand),
         &restored_args.join(" "),
         filter_fn,
-        runner::RunOptions::with_tee(&format!("cargo_{}", subcommand)),
+        runner::RunOptions::default(),
     )
 }
 

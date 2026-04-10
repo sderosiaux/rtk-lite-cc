@@ -1,6 +1,5 @@
 //! Runs a command and produces a heuristic summary of its output.
 
-use crate::core::tracking;
 use crate::core::utils::truncate;
 use anyhow::{Context, Result};
 use regex::Regex;
@@ -8,8 +7,6 @@ use std::process::{Command, Stdio};
 
 /// Run a command and provide a heuristic summary
 pub fn run(command: &str, verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
     if verbose > 0 {
         eprintln!("Running and summarizing: {}", command);
     }
@@ -36,9 +33,7 @@ pub fn run(command: &str, verbose: u8) -> Result<i32> {
     let exit_code = crate::core::utils::exit_code_from_output(&output, command);
 
     let summary = summarize_output(&raw, command, output.status.success());
-    println!("{}", summary);
-    timer.track(command, "rtk summary", &raw, &summary);
-    Ok(exit_code)
+    println!("{}", summary);    Ok(exit_code)
 }
 
 fn summarize_output(output: &str, command: &str, success: bool) -> String {

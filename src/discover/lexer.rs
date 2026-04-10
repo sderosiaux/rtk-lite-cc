@@ -258,44 +258,6 @@ fn flush_arg(tokens: &mut Vec<ParsedToken>, current: &mut String, offset: usize)
     }
 }
 
-pub fn shell_split(input: &str) -> Vec<String> {
-    let mut tokens = Vec::new();
-    let mut current = String::new();
-    let mut chars = input.chars().peekable();
-    let mut in_single = false;
-    let mut in_double = false;
-
-    while let Some(c) = chars.next() {
-        match c {
-            '\\' if !in_single => {
-                if let Some(next) = chars.next() {
-                    current.push(next);
-                }
-            }
-            '\'' if !in_double => {
-                in_single = !in_single;
-            }
-            '"' if !in_single => {
-                in_double = !in_double;
-            }
-            ' ' | '\t' if !in_single && !in_double => {
-                if !current.is_empty() {
-                    tokens.push(std::mem::take(&mut current));
-                }
-            }
-            _ => {
-                current.push(c);
-            }
-        }
-    }
-
-    if !current.is_empty() {
-        tokens.push(current);
-    }
-
-    tokens
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -853,72 +815,5 @@ mod tests {
         assert!(tokens
             .iter()
             .any(|t| t.kind == TokenKind::Arg && t.value == "file"));
-    }
-
-    #[test]
-    fn test_shell_split_simple() {
-        assert_eq!(
-            shell_split("head -50 file.php"),
-            vec!["head", "-50", "file.php"]
-        );
-    }
-
-    #[test]
-    fn test_shell_split_double_quotes() {
-        assert_eq!(
-            shell_split(r#"git log --format="%H %s""#),
-            vec!["git", "log", "--format=%H %s"]
-        );
-    }
-
-    #[test]
-    fn test_shell_split_single_quotes() {
-        assert_eq!(
-            shell_split("grep -r 'hello world' ."),
-            vec!["grep", "-r", "hello world", "."]
-        );
-    }
-
-    #[test]
-    fn test_shell_split_single_word() {
-        assert_eq!(shell_split("ls"), vec!["ls"]);
-    }
-
-    #[test]
-    fn test_shell_split_empty() {
-        let result: Vec<String> = shell_split("");
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn test_shell_split_backslash_escape() {
-        assert_eq!(
-            shell_split(r"echo hello\ world"),
-            vec!["echo", "hello world"]
-        );
-    }
-
-    #[test]
-    fn test_shell_split_unclosed_quote() {
-        let result = shell_split("echo 'hello");
-        assert_eq!(result, vec!["echo", "hello"]);
-    }
-
-    #[test]
-    fn test_shell_split_mixed_quotes() {
-        assert_eq!(
-            shell_split(r#"echo "it's" 'a "test"'"#),
-            vec!["echo", "it's", "a \"test\""]
-        );
-    }
-
-    #[test]
-    fn test_shell_split_tabs() {
-        assert_eq!(shell_split("a\tb\tc"), vec!["a", "b", "c"]);
-    }
-
-    #[test]
-    fn test_shell_split_multiple_spaces() {
-        assert_eq!(shell_split("a   b   c"), vec!["a", "b", "c"]);
     }
 }

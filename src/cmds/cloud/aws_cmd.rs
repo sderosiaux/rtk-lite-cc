@@ -3,8 +3,6 @@
 //! Replaces verbose `--output table`/`text` with JSON, then compresses.
 //! Specialized filters for high-frequency commands (STS, S3, EC2, ECS, RDS, CloudFormation).
 
-use crate::core::tee::force_tee_hint;
-use crate::core::tracking;
 use crate::core::utils::{
     exit_code_from_output, exit_code_from_status, human_bytes, join_with_overflow,
     resolved_command, shorten_arn, truncate_iso_date,
@@ -216,8 +214,6 @@ fn is_structured_operation(args: &[String]) -> bool {
 
 /// Generic strategy: force --output json for structured ops, compress via json_cmd schema
 fn run_generic(subcommand: &str, args: &[String], verbose: u8, full_sub: &str) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
     let mut cmd = resolved_command("aws");
     cmd.arg(subcommand);
 
@@ -244,18 +240,11 @@ fn run_generic(subcommand: &str, args: &[String], verbose: u8, full_sub: &str) -
     let raw = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
-    if !output.status.success() {
-        timer.track(
-            &format!("aws {}", full_sub),
-            &format!("rtk aws {}", full_sub),
-            &stderr,
-            &stderr,
-        );
-        eprintln!("{}", stderr.trim());
+    if !output.status.success() {        eprintln!("{}", stderr.trim());
         return Ok(crate::core::utils::exit_code_from_output(&output, "aws"));
     }
 
-    let filtered = match json_cmd::filter_json_string(&raw, JSON_COMPRESS_DEPTH) {
+    let _filtered = match json_cmd::filter_json_string(&raw, JSON_COMPRESS_DEPTH) {
         Ok(schema) => {
             println!("{}", schema);
             schema
@@ -266,14 +255,6 @@ fn run_generic(subcommand: &str, args: &[String], verbose: u8, full_sub: &str) -
             raw.clone()
         }
     };
-
-    timer.track(
-        &format!("aws {}", full_sub),
-        &format!("rtk aws {}", full_sub),
-        &raw,
-        &filtered,
-    );
-
     Ok(0)
 }
 
@@ -332,13 +313,11 @@ fn run_aws_filtered(
     filter_fn: fn(&str) -> Option<FilterResult>,
 ) -> Result<i32> {
     let cmd_label = format!("aws {}", sub_args.join(" "));
-    let rtk_label = format!("rtk {}", cmd_label);
-    let slug = cmd_label.replace(' ', "_");
-    let timer = tracking::TimedExecution::start();
-    let (stdout, stderr, status) = run_aws_json(sub_args, extra_args, verbose)?;
+    let _rtk_label = format!("rtk {}", cmd_label);
+    let _slug = cmd_label.replace(' ', "_");    let (stdout, stderr, status) = run_aws_json(sub_args, extra_args, verbose)?;
 
     // Combine stdout+stderr for accurate tracking (per contract)
-    let raw = if stderr.is_empty() {
+    let _raw = if stderr.is_empty() {
         stdout.clone()
     } else {
         format!("{}\n{}", stdout, stderr)
@@ -346,13 +325,7 @@ fn run_aws_filtered(
 
     if !status.success() {
         let exit_code = exit_code_from_status(&status, "aws");
-        if let Some(hint) = crate::core::tee::tee_and_hint(&raw, &slug, exit_code) {
-            eprintln!("{}\n{}", stderr.trim(), hint);
-        } else {
-            eprintln!("{}", stderr.trim());
-        }
-        timer.track(&cmd_label, &rtk_label, &raw, &stderr);
-        return Ok(exit_code);
+        eprintln!("{}", stderr.trim());        return Ok(exit_code);
     }
 
     let result = filter_fn(&stdout).unwrap_or_else(|| {
@@ -360,34 +333,11 @@ fn run_aws_filtered(
         FilterResult::new(stdout.clone())
     });
 
-    if result.truncated {
-        if let Some(hint) = crate::core::tee::force_tee_hint(&raw, &slug) {
-            println!("{}\n{}", result.text, hint);
-        } else {
-            println!("{}", result.text);
-        }
-    } else if let Some(hint) = crate::core::tee::tee_and_hint(&raw, &slug, 0) {
-        println!("{}\n{}", result.text, hint);
-    } else {
-        println!("{}", result.text);
-    }
-
-    timer.track(&cmd_label, &rtk_label, &raw, &result.text);
-    Ok(0)
+    println!("{}", result.text);    Ok(0)
 }
 
-fn run_sts_identity(extra_args: &[String], verbose: u8) -> Result<i32> {
-    run_aws_filtered(
-        &["sts", "get-caller-identity"],
-        extra_args,
-        verbose,
-        filter_sts_identity,
-    )
-}
 
 fn run_s3_ls(extra_args: &[String], verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
     let mut cmd = resolved_command("aws");
     cmd.args(["s3", "ls"]);
     for arg in extra_args {
@@ -401,43 +351,24 @@ fn run_s3_ls(extra_args: &[String], verbose: u8) -> Result<i32> {
     let output = cmd.output().context("Failed to run aws s3 ls")?;
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let raw = if stderr.is_empty() {
+    let _raw = if stderr.is_empty() {
         stdout.clone()
     } else {
         format!("{}\n{}", stdout, stderr)
     };
     if !output.status.success() {
         let exit_code = exit_code_from_output(&output, "aws");
-        if let Some(hint) = crate::core::tee::tee_and_hint(&raw, "aws_s3_ls", exit_code) {
-            eprintln!("{}\n{}", stderr.trim(), hint);
-        } else {
-            eprintln!("{}", stderr.trim());
-        }
-        timer.track("aws s3 ls", "rtk aws s3 ls", &raw, &stderr);
-        return Ok(exit_code);
+        eprintln!("{}", stderr.trim());        return Ok(exit_code);
     }
 
     let result = filter_s3_ls(&stdout);
-    if result.truncated {
-        if let Some(hint) = crate::core::tee::force_tee_hint(&raw, "aws_s3_ls") {
-            println!("{}\n{}", result.text, hint);
-        } else {
-            println!("{}", result.text);
-        }
-    } else {
-        println!("{}", result.text);
-    }
-
-    timer.track("aws s3 ls", "rtk aws s3 ls", &raw, &result.text);
-    Ok(0)
+    println!("{}", result.text);    Ok(0)
 }
 
 /// Run s3 sync/cp (text output, not JSON)
-fn run_s3_transfer(operation: &str, extra_args: &[String], verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-    let cmd_label = format!("aws s3 {}", operation);
-    let rtk_label = format!("rtk aws s3 {}", operation);
-    let slug = format!("aws_s3_{}", operation);
+fn run_s3_transfer(operation: &str, extra_args: &[String], verbose: u8) -> Result<i32> {    let cmd_label = format!("aws s3 {}", operation);
+    let _rtk_label = format!("rtk aws s3 {}", operation);
+    let _slug = format!("aws_s3_{}", operation);
 
     let mut cmd = resolved_command("aws");
     cmd.args(["s3", operation]);
@@ -454,35 +385,26 @@ fn run_s3_transfer(operation: &str, extra_args: &[String], verbose: u8) -> Resul
         .context(format!("Failed to run {}", cmd_label))?;
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let raw = if stderr.is_empty() {
+    let _raw = if stderr.is_empty() {
         stdout.clone()
     } else {
         format!("{}\n{}", stdout, stderr)
     };
     if !output.status.success() {
         let exit_code = exit_code_from_output(&output, "aws");
-        if let Some(hint) = crate::core::tee::tee_and_hint(&raw, &slug, exit_code) {
-            eprintln!("{}\n{}", stderr.trim(), hint);
-        } else {
-            eprintln!("{}", stderr.trim());
-        }
-        timer.track(&cmd_label, &rtk_label, &raw, &stderr);
-        return Ok(exit_code);
+        eprintln!("{}", stderr.trim());        return Ok(exit_code);
     }
 
     let result = filter_s3_transfer(&stdout);
     if result.truncated {
-        if let Some(hint) = force_tee_hint(&raw, &slug) {
+        if let Some(hint) = None::<String> {
             println!("{}\n{}", result.text, hint);
         } else {
             println!("{}", result.text);
         }
     } else {
         println!("{}", result.text);
-    }
-
-    timer.track(&cmd_label, &rtk_label, &raw, &result.text);
-    Ok(0)
+    }    Ok(0)
 }
 
 // --- Filter functions (all use serde_json::Value for resilience) ---

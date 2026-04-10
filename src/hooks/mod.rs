@@ -1,7 +1,6 @@
-//! Hook installation and lifecycle management for AI coding agents.
+//! Hook installation and lifecycle for Claude Code integration.
 
 pub mod constants;
-pub mod hook_audit_cmd;
 pub mod hook_check;
 pub mod hook_cmd;
 pub mod init;

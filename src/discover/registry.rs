@@ -13,34 +13,12 @@ pub enum Classification {
         rtk_equivalent: &'static str,
         category: &'static str,
         estimated_savings_pct: f64,
-        status: super::report::RtkStatus,
+        status: super::rules::RtkStatus,
     },
     Unsupported {
         base_command: String,
     },
     Ignored,
-}
-
-/// Average token counts per category for estimation when no output_len available.
-pub fn category_avg_tokens(category: &str, subcmd: &str) -> usize {
-    match category {
-        "Git" => match subcmd {
-            "log" | "diff" | "show" => 200,
-            _ => 40,
-        },
-        "Cargo" => match subcmd {
-            "test" => 500,
-            _ => 150,
-        },
-        "Tests" => 800,
-        "Files" => 100,
-        "Build" => 300,
-        "Infra" => 120,
-        "Network" => 150,
-        "GitHub" => 200,
-        "PackageManager" => 150,
-        _ => 150,
-    }
 }
 
 lazy_static! {
@@ -137,7 +115,7 @@ pub fn classify_command(cmd: &str) -> Classification {
                     .iter()
                     .find(|(s, _)| *s == subcmd)
                     .map(|(_, st)| *st)
-                    .unwrap_or(super::report::RtkStatus::Existing);
+                    .unwrap_or(super::rules::RtkStatus::Existing);
 
                 // Check if this subcommand has custom savings
                 let savings = rule
@@ -149,10 +127,10 @@ pub fn classify_command(cmd: &str) -> Classification {
 
                 (savings, status)
             } else {
-                (rule.savings_pct, super::report::RtkStatus::Existing)
+                (rule.savings_pct, super::rules::RtkStatus::Existing)
             }
         } else {
-            (rule.savings_pct, super::report::RtkStatus::Existing)
+            (rule.savings_pct, super::rules::RtkStatus::Existing)
         };
 
         Classification::Supported {
@@ -203,48 +181,6 @@ fn extract_base_command(cmd: &str) -> &str {
     }
 }
 
-pub fn split_command_chain(cmd: &str) -> Vec<&str> {
-    let trimmed = cmd.trim();
-    if trimmed.is_empty() {
-        return vec![];
-    }
-
-    if trimmed.contains("<<") || trimmed.contains("$((") {
-        return vec![trimmed];
-    }
-
-    let tokens = tokenize(trimmed);
-    let mut results = Vec::new();
-    let mut seg_start: usize = 0;
-
-    for tok in &tokens {
-        match tok.kind {
-            TokenKind::Operator => {
-                let segment = trimmed[seg_start..tok.offset].trim();
-                if !segment.is_empty() {
-                    results.push(segment);
-                }
-                seg_start = tok.offset + tok.value.len();
-            }
-            TokenKind::Pipe => {
-                let segment = trimmed[seg_start..tok.offset].trim();
-                if !segment.is_empty() {
-                    results.push(segment);
-                }
-                return results;
-            }
-            _ => {}
-        }
-    }
-
-    let segment = trimmed[seg_start..].trim();
-    if !segment.is_empty() {
-        results.push(segment);
-    }
-
-    results
-}
-
 /// Strip git global options before the subcommand (#163).
 /// `git -C /tmp status` → `git status`, preserving the rest.
 /// Returns the original string unchanged if not a git command.
@@ -288,16 +224,6 @@ pub fn has_rtk_disabled_prefix(cmd: &str) -> bool {
     let prefix_len = trimmed.len() - stripped.len();
     let prefix_part = &trimmed[..prefix_len];
     prefix_part.contains("RTK_DISABLED=")
-}
-
-/// Strip RTK_DISABLED=X and other env prefixes, return the actual command.
-pub fn strip_disabled_prefix(cmd: &str) -> &str {
-    let trimmed = cmd.trim();
-    let stripped = ENV_PREFIX.replace(trimmed, "");
-    // stripped is a Cow<str> that borrows from trimmed when no replacement happens.
-    // We need to return a &str into the original, so compute the offset.
-    let prefix_len = trimmed.len() - stripped.len();
-    trimmed[prefix_len..].trim_start()
 }
 
 fn strip_trailing_redirects(cmd: &str) -> (&str, &str) {
@@ -500,7 +426,7 @@ fn rewrite_segment(seg: &str, excluded: &[String]) -> Option<String> {
     // semantics than rtk read or no equivalent at all. Only `-n` (line numbers)
     // maps correctly to `rtk read -n`. Skip rewrite for any other flag.
     if cmd_part.starts_with("cat ") {
-        let args = cmd_part["cat ".len()..].trim_start();
+        let args = cmd_part.strip_prefix("cat ").unwrap_or("").trim_start();
         if args.starts_with('-') && !args.starts_with("-n ") && !args.starts_with("-n\t") {
             return None;
         }
@@ -582,7 +508,7 @@ fn strip_word_prefix<'a>(cmd: &'a str, prefix: &str) -> Option<&'a str> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::report::RtkStatus;
+    use super::super::rules::RtkStatus;
     use super::*;
 
     #[test]
@@ -828,40 +754,6 @@ mod tests {
     fn test_done_still_ignored_exact() {
         // Bare "done" (shell keyword) should still be ignored
         assert_eq!(classify_command("done"), Classification::Ignored);
-    }
-
-    #[test]
-    fn test_split_chain_and() {
-        assert_eq!(split_command_chain("a && b"), vec!["a", "b"]);
-    }
-
-    #[test]
-    fn test_split_chain_semicolon() {
-        assert_eq!(split_command_chain("a ; b"), vec!["a", "b"]);
-    }
-
-    #[test]
-    fn test_split_pipe_first_only() {
-        assert_eq!(split_command_chain("a | b"), vec!["a"]);
-    }
-
-    #[test]
-    fn test_split_single() {
-        assert_eq!(split_command_chain("git status"), vec!["git status"]);
-    }
-
-    #[test]
-    fn test_split_quoted_and() {
-        assert_eq!(
-            split_command_chain(r#"echo "a && b""#),
-            vec![r#"echo "a && b""#]
-        );
-    }
-
-    #[test]
-    fn test_split_heredoc_no_split() {
-        let cmd = "cat <<'EOF'\nhello && world\nEOF";
-        assert_eq!(split_command_chain(cmd), vec![cmd]);
     }
 
     #[test]
@@ -2196,19 +2088,6 @@ mod tests {
         assert!(!has_rtk_disabled_prefix("SOME_VAR=1 git status"));
     }
 
-    #[test]
-    fn test_strip_disabled_prefix() {
-        assert_eq!(
-            strip_disabled_prefix("RTK_DISABLED=1 git status"),
-            "git status"
-        );
-        assert_eq!(
-            strip_disabled_prefix("FOO=1 RTK_DISABLED=1 cargo test"),
-            "cargo test"
-        );
-        assert_eq!(strip_disabled_prefix("git status"), "git status");
-    }
-
     // --- #485: absolute path normalization ---
 
     #[test]
@@ -2401,14 +2280,6 @@ mod tests {
         assert_eq!(
             rewrite_command("git log $(git rev-parse HEAD~1)", &[]),
             Some("rtk git log $(git rev-parse HEAD~1)".into())
-        );
-    }
-
-    #[test]
-    fn test_split_command_substitution_no_split() {
-        assert_eq!(
-            split_command_chain("git log $(git rev-parse HEAD~1)"),
-            vec!["git log $(git rev-parse HEAD~1)"]
         );
     }
 }

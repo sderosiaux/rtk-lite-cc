@@ -1,6 +1,5 @@
 //! Deduplicates repeated log lines and shows counts instead.
 
-use crate::core::tracking;
 use anyhow::Result;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -22,28 +21,17 @@ lazy_static! {
 
 /// Filter and deduplicate log output
 pub fn run_file(file: &Path, verbose: u8) -> Result<()> {
-    let timer = tracking::TimedExecution::start();
-
     if verbose > 0 {
         eprintln!("Analyzing log: {}", file.display());
     }
 
     let content = fs::read_to_string(file)?;
     let result = analyze_logs(&content);
-    println!("{}", result);
-    timer.track(
-        &format!("cat {}", file.display()),
-        "rtk log",
-        &content,
-        &result,
-    );
-    Ok(())
+    println!("{}", result);    Ok(())
 }
 
 /// Filter logs from stdin
 pub fn run_stdin(_verbose: u8) -> Result<()> {
-    let timer = tracking::TimedExecution::start();
-
     let mut content = String::new();
     let stdin = io::stdin();
     for line in stdin.lock().lines() {
@@ -53,9 +41,6 @@ pub fn run_stdin(_verbose: u8) -> Result<()> {
 
     let result = analyze_logs(&content);
     println!("{}", result);
-
-    timer.track("log (stdin)", "rtk log (stdin)", &content, &result);
-
     Ok(())
 }
 

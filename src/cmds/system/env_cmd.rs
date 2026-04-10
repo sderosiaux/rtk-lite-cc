@@ -1,14 +1,11 @@
 //! Filters environment variables, hiding secrets and noise.
 
-use crate::core::tracking;
 use anyhow::Result;
 use std::collections::HashSet;
 use std::env;
 
 /// Show filtered environment variables (hide sensitive data)
 pub fn run(filter: Option<&str>, show_all: bool, verbose: u8) -> Result<()> {
-    let timer = tracking::TimedExecution::start();
-
     if verbose > 0 {
         eprintln!("Environment variables:");
     }
@@ -123,10 +120,8 @@ pub fn run(filter: Option<&str>, show_all: bool, verbose: u8) -> Result<()> {
         println!("\nTotal: {} vars (showing {} relevant)", total, shown);
     }
 
-    let raw: String = vars.iter().map(|(k, v)| format!("{}={}\n", k, v)).collect();
-    let rtk = format!("{} vars -> {} shown", total, shown);
-    timer.track("env", "rtk env", &raw, &rtk);
-    Ok(())
+    let _raw: String = vars.iter().map(|(k, v)| format!("{}={}\n", k, v)).collect();
+    let _rtk = format!("{} vars -> {} shown", total, shown);    Ok(())
 }
 
 fn get_sensitive_patterns() -> HashSet<&'static str> {

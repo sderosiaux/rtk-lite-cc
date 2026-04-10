@@ -1,7 +1,6 @@
 //! Filters Go command output — test results, build errors, vet warnings.
 
 use crate::core::runner;
-use crate::core::tracking;
 use crate::core::utils::{exit_code_from_output, resolved_command, truncate};
 use crate::golangci_cmd;
 use anyhow::{Context, Result};
@@ -61,7 +60,7 @@ pub fn run_test(args: &[String], verbose: u8) -> Result<i32> {
         "go test",
         &args.join(" "),
         filter_go_test_json,
-        crate::core::runner::RunOptions::stdout_only().tee("go_test"),
+        runner::RunOptions::stdout_only(),
     )
 }
 
@@ -82,7 +81,7 @@ pub fn run_build(args: &[String], verbose: u8) -> Result<i32> {
         "go build",
         &args.join(" "),
         filter_go_build,
-        crate::core::runner::RunOptions::with_tee("go_build"),
+        runner::RunOptions::default(),
     )
 }
 
@@ -103,7 +102,7 @@ pub fn run_vet(args: &[String], verbose: u8) -> Result<i32> {
         "go vet",
         &args.join(" "),
         filter_go_vet,
-        crate::core::runner::RunOptions::with_tee("go_vet"),
+        runner::RunOptions::default(),
     )
 }
 
@@ -118,9 +117,6 @@ pub fn run_other(args: &[OsString], verbose: u8) -> Result<i32> {
             GoTool::GolangciLint => return run_go_tool_golangci_lint(tool_args, verbose),
         }
     }
-
-    let timer = tracking::TimedExecution::start();
-
     let subcommand = args[0].to_string_lossy();
     let mut cmd = resolved_command("go");
     cmd.arg(&*subcommand);
@@ -139,18 +135,10 @@ pub fn run_other(args: &[OsString], verbose: u8) -> Result<i32> {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let raw = format!("{}\n{}", stdout, stderr);
+    let _raw = format!("{}\n{}", stdout, stderr);
 
     print!("{}", stdout);
     eprint!("{}", stderr);
-
-    timer.track(
-        &format!("go {}", subcommand),
-        &format!("rtk go {}", subcommand),
-        &raw,
-        &raw, // No filtering for unsupported commands
-    );
-
     Ok(exit_code_from_output(&output, "go"))
 }
 
@@ -218,8 +206,6 @@ fn match_go_tool(args: &[OsString]) -> Option<(GoTool, &[OsString])> {
 /// Run `go tool golangci-lint` and filter its output via the golangci JSON filter.
 /// Reusing parts of golangci_cmd.
 fn run_go_tool_golangci_lint(args: &[OsString], verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
     let version = detect_go_tool_golangci_version();
 
     let mut cmd = resolved_command("go");
@@ -255,7 +241,7 @@ fn run_go_tool_golangci_lint(args: &[OsString], verbose: u8) -> Result<i32> {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let raw = format!("{}\n{}", stdout, stderr);
+    let _raw = format!("{}\n{}", stdout, stderr);
 
     // v2 outputs JSON on first line + trailing text; v1 outputs just JSON
     let json_output = if version >= 2 {
@@ -270,14 +256,6 @@ fn run_go_tool_golangci_lint(args: &[OsString], verbose: u8) -> Result<i32> {
     if !stderr.trim().is_empty() && verbose > 0 {
         eprintln!("{}", stderr.trim());
     }
-
-    timer.track(
-        "go tool golangci-lint",
-        "rtk go tool golangci-lint",
-        &raw,
-        &filtered,
-    );
-
     let exit_code = exit_code_from_output(&output, "go tool golangci-lint");
     // golangci-lint: exit 0 = clean, exit 1 = lint issues found (not an error),
     // exit 2+ = config/build error, None = killed by signal (OOM, SIGKILL)

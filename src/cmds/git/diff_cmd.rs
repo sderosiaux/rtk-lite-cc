@@ -1,21 +1,18 @@
 //! Compares two files and shows only the changed lines.
 
-use crate::core::tracking;
 use anyhow::Result;
 use std::fs;
 use std::path::Path;
 
 /// Ultra-condensed diff - only changed lines, no context
 pub fn run(file1: &Path, file2: &Path, verbose: u8) -> Result<()> {
-    let timer = tracking::TimedExecution::start();
-
     if verbose > 0 {
         eprintln!("Comparing: {} vs {}", file1.display(), file2.display());
     }
 
     let content1 = fs::read_to_string(file1)?;
     let content2 = fs::read_to_string(file2)?;
-    let raw = format!("{}\n---\n{}", content1, content2);
+    let _raw = format!("{}\n---\n{}", content1, content2);
 
     let lines1: Vec<&str> = content1.lines().collect();
     let lines2: Vec<&str> = content2.lines().collect();
@@ -25,12 +22,6 @@ pub fn run(file1: &Path, file2: &Path, verbose: u8) -> Result<()> {
     if diff.added == 0 && diff.removed == 0 {
         rtk.push_str("[ok] Files are identical");
         println!("{}", rtk);
-        timer.track(
-            &format!("diff {} {}", file1.display(), file2.display()),
-            "rtk diff",
-            &raw,
-            &rtk,
-        );
         return Ok(());
     }
 
@@ -53,19 +44,12 @@ pub fn run(file1: &Path, file2: &Path, verbose: u8) -> Result<()> {
     }
 
     print!("{}", rtk);
-    timer.track(
-        &format!("diff {} {}", file1.display(), file2.display()),
-        "rtk diff",
-        &raw,
-        &rtk,
-    );
     Ok(())
 }
 
 /// Run diff from stdin (piped command output)
 pub fn run_stdin(_verbose: u8) -> Result<()> {
     use std::io::{self, Read};
-    let timer = tracking::TimedExecution::start();
 
     let mut input = String::new();
     io::stdin().read_to_string(&mut input)?;
@@ -73,8 +57,6 @@ pub fn run_stdin(_verbose: u8) -> Result<()> {
     // Parse unified diff format
     let condensed = condense_unified_diff(&input);
     println!("{}", condensed);
-
-    timer.track("diff (stdin)", "rtk diff (stdin)", &input, &condensed);
 
     Ok(())
 }

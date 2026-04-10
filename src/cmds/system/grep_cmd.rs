@@ -1,7 +1,6 @@
 //! Filters grep output by grouping matches by file.
 
 use crate::core::config;
-use crate::core::tracking;
 use crate::core::utils::{exit_code_from_output, resolved_command};
 use anyhow::{Context, Result};
 use regex::Regex;
@@ -19,8 +18,6 @@ pub fn run(
     extra_args: &[String],
     verbose: u8,
 ) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
     if verbose > 0 {
         eprintln!("grep: '{}' in {}", pattern, path);
     }
@@ -58,7 +55,7 @@ pub fn run(
     let stdout = String::from_utf8_lossy(&output.stdout);
     let exit_code = exit_code_from_output(&output, "grep");
 
-    let raw_output = stdout.to_string();
+    let _raw_output = stdout.to_string();
 
     if stdout.trim().is_empty() {
         // Show stderr for errors (bad regex, missing file, etc.)
@@ -69,14 +66,7 @@ pub fn run(
             }
         }
         let msg = format!("0 matches for '{}'", pattern);
-        println!("{}", msg);
-        timer.track(
-            &format!("grep -rn '{}' {}", pattern, path),
-            "rtk grep",
-            &raw_output,
-            &msg,
-        );
-        return Ok(exit_code);
+        println!("{}", msg);        return Ok(exit_code);
     }
 
     let mut by_file: HashMap<String, Vec<(usize, String)>> = HashMap::new();
@@ -142,13 +132,6 @@ pub fn run(
     }
 
     print!("{}", rtk_output);
-    timer.track(
-        &format!("grep -rn '{}' {}", pattern, path),
-        "rtk grep",
-        &raw_output,
-        &rtk_output,
-    );
-
     Ok(exit_code)
 }
 

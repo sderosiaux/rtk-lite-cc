@@ -1,7 +1,6 @@
 //! Filters dotnet CLI output — build, test, and format results.
 
 use crate::binlog;
-use crate::core::tracking;
 use crate::core::utils::{exit_code_from_output, resolved_command, truncate};
 use crate::dotnet_format_report;
 use crate::dotnet_trx;
@@ -30,9 +29,7 @@ pub fn run_restore(args: &[String], verbose: u8) -> Result<i32> {
     run_dotnet_with_binlog("restore", args, verbose)
 }
 
-pub fn run_format(args: &[String], verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-    let (report_path, cleanup_report_path) = resolve_format_report_path(args);
+pub fn run_format(args: &[String], verbose: u8) -> Result<i32> {    let (report_path, cleanup_report_path) = resolve_format_report_path(args);
     let mut cmd = resolved_command("dotnet");
     cmd.env(DOTNET_CLI_UI_LANGUAGE, DOTNET_CLI_UI_LANGUAGE_VALUE);
     cmd.arg("format");
@@ -55,14 +52,6 @@ pub fn run_format(args: &[String], verbose: u8) -> Result<i32> {
     let filtered =
         format_report_summary_or_raw(report_path.as_deref(), check_mode, &raw, command_started_at);
     println!("{}", filtered);
-
-    timer.track(
-        &format!("dotnet format {}", args.join(" ")),
-        &format!("rtk dotnet format {}", args.join(" ")),
-        &raw,
-        &filtered,
-    );
-
     if cleanup_report_path {
         if let Some(path) = report_path.as_deref() {
             cleanup_temp_file(path);
@@ -75,10 +64,7 @@ pub fn run_format(args: &[String], verbose: u8) -> Result<i32> {
 pub fn run_passthrough(args: &[OsString], verbose: u8) -> Result<i32> {
     if args.is_empty() {
         anyhow::bail!("dotnet: no subcommand specified");
-    }
-
-    let timer = tracking::TimedExecution::start();
-    let subcommand = args[0].to_string_lossy().to_string();
+    }    let subcommand = args[0].to_string_lossy().to_string();
 
     let mut cmd = resolved_command("dotnet");
     cmd.env(DOTNET_CLI_UI_LANGUAGE, DOTNET_CLI_UI_LANGUAGE_VALUE);
@@ -97,24 +83,14 @@ pub fn run_passthrough(args: &[OsString], verbose: u8) -> Result<i32> {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let raw = format!("{}\n{}", stdout, stderr);
+    let _raw = format!("{}\n{}", stdout, stderr);
 
     print!("{}", stdout);
     eprint!("{}", stderr);
-
-    timer.track(
-        &format!("dotnet {}", subcommand),
-        &format!("rtk dotnet {}", subcommand),
-        &raw,
-        &raw,
-    );
-
     Ok(exit_code_from_output(&output, "dotnet"))
 }
 
-fn run_dotnet_with_binlog(subcommand: &str, args: &[String], verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-    let binlog_path = build_binlog_path(subcommand);
+fn run_dotnet_with_binlog(subcommand: &str, args: &[String], verbose: u8) -> Result<i32> {    let binlog_path = build_binlog_path(subcommand);
     let should_expect_binlog = subcommand != "test" || has_binlog_arg(args);
 
     // For test commands, prefer user-provided results directory; otherwise create isolated one.
@@ -234,14 +210,6 @@ fn run_dotnet_with_binlog(subcommand: &str, args: &[String], verbose: u8) -> Res
     };
 
     println!("{}", output_to_print);
-
-    timer.track(
-        &format!("dotnet {} {}", subcommand, args.join(" ")),
-        &format!("rtk dotnet {} {}", subcommand, args.join(" ")),
-        &raw,
-        &output_to_print,
-    );
-
     cleanup_temp_file(&binlog_path);
     if cleanup_trx_results_dir {
         if let Some(dir) = trx_results_dir.as_deref() {

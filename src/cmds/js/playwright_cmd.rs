@@ -1,6 +1,5 @@
 //! Filters Playwright E2E test output to show only failures.
 
-use crate::core::tracking;
 use crate::core::utils::{detect_package_manager, resolved_command, strip_ansi};
 use anyhow::{Context, Result};
 use regex::Regex;
@@ -241,8 +240,6 @@ fn extract_failures_regex(output: &str) -> Vec<TestFailure> {
 }
 
 pub fn run(args: &[String], verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
     // Skip `which playwright` — it can find pyenv shims or other non-Node
     // binaries. Always resolve through the package manager.
     let pm = detect_package_manager();
@@ -291,7 +288,7 @@ pub fn run(args: &[String], verbose: u8) -> Result<i32> {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let raw = format!("{}\n{}", stdout, stderr);
+    let _raw = format!("{}\n{}", stdout, stderr);
 
     // Parse output using PlaywrightParser
     let parse_result = PlaywrightParser::parse(&stdout);
@@ -316,22 +313,10 @@ pub fn run(args: &[String], verbose: u8) -> Result<i32> {
         }
     };
 
-    let exit_code = crate::core::utils::exit_code_from_output(&output, "playwright");
-    if let Some(hint) = crate::core::tee::tee_and_hint(&raw, "playwright", exit_code) {
-        println!("{}\n{}", filtered, hint);
-    } else {
-        println!("{}", filtered);
-    }
-
-    timer.track(
-        &format!("playwright {}", args.join(" ")),
-        &format!("rtk playwright {}", args.join(" ")),
-        &raw,
-        &filtered,
-    );
-
+    println!("{}", filtered);
     // Preserve exit code for CI/CD
     if !output.status.success() {
+        let exit_code = crate::core::utils::exit_code_from_output(&output, "playwright");
         return Ok(exit_code);
     }
 

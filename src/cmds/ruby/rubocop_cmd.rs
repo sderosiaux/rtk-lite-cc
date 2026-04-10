@@ -82,7 +82,7 @@ pub fn run(args: &[String], verbose: u8) -> Result<i32> {
                 filter_rubocop_json(stdout)
             }
         },
-        runner::RunOptions::stdout_only().tee("rubocop"),
+        runner::RunOptions::stdout_only(),
     )
 }
 

@@ -1,6 +1,5 @@
 //! Runs code formatters (Prettier, Ruff) and shows only files that changed.
 
-use crate::core::tracking;
 use crate::core::utils::{exit_code_from_output, package_manager_exec, resolved_command};
 use crate::prettier_cmd;
 use crate::ruff_cmd;
@@ -53,8 +52,6 @@ fn detect_formatter_in_dir(args: &[String], dir: &Path) -> String {
 }
 
 pub fn run(args: &[String], verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
     // Detect formatter
     let formatter = detect_formatter(args);
 
@@ -129,14 +126,6 @@ pub fn run(args: &[String], verbose: u8) -> Result<i32> {
     };
 
     println!("{}", filtered);
-
-    timer.track(
-        &format!("{} {}", formatter, user_args.join(" ")),
-        &format!("rtk format {} {}", formatter, user_args.join(" ")),
-        &raw,
-        &filtered,
-    );
-
     Ok(exit_code_from_output(&output, "format"))
 }
 

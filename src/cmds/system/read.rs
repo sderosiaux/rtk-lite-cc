@@ -1,7 +1,6 @@
 //! Reads source files with optional language-aware filtering to strip boilerplate.
 
 use crate::core::filter::{self, FilterLevel, Language};
-use crate::core::tracking;
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
@@ -14,8 +13,6 @@ pub fn run(
     line_numbers: bool,
     verbose: u8,
 ) -> Result<()> {
-    let timer = tracking::TimedExecution::start();
-
     if verbose > 0 {
         eprintln!("Reading: {} (filter: {})", file.display(), level);
     }
@@ -70,14 +67,7 @@ pub fn run(
     } else {
         filtered.clone()
     };
-    print!("{}", rtk_output);
-    timer.track(
-        &format!("cat {}", file.display()),
-        "rtk read",
-        &content,
-        &rtk_output,
-    );
-    Ok(())
+    print!("{}", rtk_output);    Ok(())
 }
 
 pub fn run_stdin(
@@ -88,9 +78,6 @@ pub fn run_stdin(
     verbose: u8,
 ) -> Result<()> {
     use std::io::{self, Read as IoRead};
-
-    let timer = tracking::TimedExecution::start();
-
     if verbose > 0 {
         eprintln!("Reading from stdin (filter: {})", level);
     }
@@ -134,10 +121,7 @@ pub fn run_stdin(
     } else {
         filtered.clone()
     };
-    print!("{}", rtk_output);
-
-    timer.track("cat - (stdin)", "rtk read -", &content, &rtk_output);
-    Ok(())
+    print!("{}", rtk_output);    Ok(())
 }
 
 fn format_with_line_numbers(content: &str) -> String {

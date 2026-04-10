@@ -1,14 +1,11 @@
 //! Runs arbitrary commands and captures only stderr or test failures.
 
-use crate::core::tracking;
 use anyhow::{Context, Result};
 use regex::Regex;
 use std::process::{Command, Stdio};
 
 /// Run a command and filter output to show only errors/warnings
 pub fn run_err(command: &str, verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
     if verbose > 0 {
         eprintln!("Running: {}", command);
     }
@@ -51,20 +48,13 @@ pub fn run_err(command: &str, verbose: u8) -> Result<i32> {
         rtk.push_str(&filtered);
     }
 
+    println!("{}", rtk);
     let exit_code = crate::core::utils::exit_code_from_output(&output, "err");
-    if let Some(hint) = crate::core::tee::tee_and_hint(&raw, "err", exit_code) {
-        println!("{}\n{}", rtk, hint);
-    } else {
-        println!("{}", rtk);
-    }
-    timer.track(command, "rtk run-err", &raw, &rtk);
     Ok(exit_code)
 }
 
 /// Run tests and show only failures
 pub fn run_test(command: &str, verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
     if verbose > 0 {
         eprintln!("Running tests: {}", command);
     }
@@ -88,14 +78,9 @@ pub fn run_test(command: &str, verbose: u8) -> Result<i32> {
     let stderr = String::from_utf8_lossy(&output.stderr);
     let raw = format!("{}\n{}", stdout, stderr);
 
-    let exit_code = crate::core::utils::exit_code_from_output(&output, "test");
     let summary = extract_test_summary(&raw, command);
-    if let Some(hint) = crate::core::tee::tee_and_hint(&raw, "test", exit_code) {
-        println!("{}\n{}", summary, hint);
-    } else {
-        println!("{}", summary);
-    }
-    timer.track(command, "rtk run-test", &raw, &summary);
+    println!("{}", summary);
+    let exit_code = crate::core::utils::exit_code_from_output(&output, "test");
     Ok(exit_code)
 }
 

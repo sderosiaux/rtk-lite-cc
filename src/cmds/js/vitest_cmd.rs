@@ -4,7 +4,6 @@ use anyhow::{Context, Result};
 use regex::Regex;
 use serde::Deserialize;
 
-use crate::core::tracking;
 use crate::core::utils::{package_manager_exec, strip_ansi};
 use crate::parser::{
     emit_degradation_warning, emit_passthrough_warning, extract_json_object, truncate_passthrough,
@@ -222,8 +221,6 @@ pub fn run(cmd: VitestCommand, args: &[String], verbose: u8) -> Result<i32> {
 }
 
 fn run_vitest(args: &[String], verbose: u8) -> Result<i32> {
-    let timer = tracking::TimedExecution::start();
-
     let mut cmd = package_manager_exec("vitest");
     cmd.arg("run"); // Force non-watch mode
 
@@ -237,7 +234,7 @@ fn run_vitest(args: &[String], verbose: u8) -> Result<i32> {
     let output = cmd.output().context("Failed to run vitest")?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let combined = format!("{}{}", stdout, stderr);
+    let _combined = format!("{}{}", stdout, stderr);
 
     // Parse output using VitestParser
     let parse_result = VitestParser::parse(&stdout);
@@ -262,16 +259,9 @@ fn run_vitest(args: &[String], verbose: u8) -> Result<i32> {
         }
     };
 
-    let exit_code = crate::core::utils::exit_code_from_output(&output, "vitest");
-    if let Some(hint) = crate::core::tee::tee_and_hint(&combined, "vitest_run", exit_code) {
-        println!("{}\n{}", filtered, hint);
-    } else {
-        println!("{}", filtered);
-    }
-
-    timer.track("vitest run", "rtk vitest run", &combined, &filtered);
-
+    println!("{}", filtered);
     if !output.status.success() {
+        let exit_code = crate::core::utils::exit_code_from_output(&output, "vitest");
         return Ok(exit_code);
     }
     Ok(0)
