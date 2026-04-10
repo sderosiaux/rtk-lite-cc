@@ -59,25 +59,11 @@ struct ReplaceRule {
     replacement: String,
 }
 
-/// An inline test case attached to a filter in the TOML.
-/// Lives in `[[tests.<filter-name>]]` sections, separate from `[filters.*]`.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TomlFilterTestDef {
-    pub name: String,
-    pub input: String,
-    pub expected: String,
-}
-
 #[derive(Deserialize)]
 struct TomlFilterFile {
     schema_version: u32,
     #[serde(default)]
     filters: BTreeMap<String, TomlFilterDef>,
-    /// Inline tests keyed by filter name. Kept separate from `filters` so that
-    /// `TomlFilterDef` can keep `deny_unknown_fields` without touching test data.
-    #[serde(default)]
-    tests: BTreeMap<String, Vec<TomlFilterTestDef>>,
 }
 
 #[derive(Deserialize)]
@@ -148,26 +134,6 @@ pub struct CompiledFilter {
 }
 
 // ---------------------------------------------------------------------------
-// Results for `rtk verify`
-// ---------------------------------------------------------------------------
-
-/// Outcome of running a single inline test.
-pub struct TestOutcome {
-    pub filter_name: String,
-    pub test_name: String,
-    pub passed: bool,
-    pub actual: String,
-    pub expected: String,
-}
-
-/// Aggregated results from `run_filter_tests`.
-pub struct VerifyResults {
-    /// Individual test outcomes (all filters, or just the requested one).
-    pub outcomes: Vec<TestOutcome>,
-    /// Filter names that have no inline tests (used by `--require-all`).
-    pub filters_without_tests: Vec<String>,
-}
-
 // ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
@@ -182,30 +148,14 @@ impl TomlFilterRegistry {
     fn load() -> Self {
         let mut filters = Vec::new();
 
-        // Priority 1: project-local .rtk/filters.toml (trust-gated)
+        // Priority 1: project-local .rtk/filters.toml (auto-trusted)
         let project_filter_path = std::path::Path::new(".rtk/filters.toml");
-        if project_filter_path.exists() {
-            let trust_status = crate::hooks::trust::check_trust(project_filter_path)
-                .unwrap_or(crate::hooks::trust::TrustStatus::Untrusted);
-
-            match trust_status {
-                crate::hooks::trust::TrustStatus::Trusted
-                | crate::hooks::trust::TrustStatus::EnvOverride => {
-                    if let Ok(content) = std::fs::read_to_string(project_filter_path) {
-                        match Self::parse_and_compile(&content, "project") {
-                            Ok(f) => filters.extend(f),
-                            Err(e) => eprintln!("[rtk] warning: .rtk/filters.toml: {}", e),
-                        }
-                    }
-                }
-                crate::hooks::trust::TrustStatus::Untrusted => {
-                    eprintln!("[rtk] WARNING: untrusted project filters (.rtk/filters.toml)");
-                    eprintln!("[rtk] Filters NOT applied. Run `rtk trust` to review and enable.");
-                }
-                crate::hooks::trust::TrustStatus::ContentChanged { .. } => {
-                    eprintln!("[rtk] WARNING: .rtk/filters.toml changed since trusted.");
-                    eprintln!("[rtk] Filters NOT applied. Run `rtk trust` to re-review.");
-                }
+        if project_filter_path.exists()
+            && let Ok(content) = std::fs::read_to_string(project_filter_path)
+        {
+            match Self::parse_and_compile(&content, "project") {
+                Ok(f) => filters.extend(f),
+                Err(e) => eprintln!("[rtk] warning: .rtk/filters.toml: {}", e),
             }
         }
 
@@ -527,137 +477,12 @@ pub fn apply_filter(filter: &CompiledFilter, stdout: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// rtk verify — inline test execution
-// ---------------------------------------------------------------------------
-
-/// Run inline tests from loaded TOML files (builtin + project-local).
-///
-/// - `filter_name_opt`: if `Some`, only run tests for that filter name.
-/// - Returns `VerifyResults` with all outcomes and filters that have no tests.
-pub fn run_filter_tests(filter_name_opt: Option<&str>) -> VerifyResults {
-    let mut outcomes = Vec::new();
-    let mut all_filter_names: Vec<String> = Vec::new();
-    let mut tested_filter_names: std::collections::HashSet<String> =
-        std::collections::HashSet::new();
-
-    let builtin = BUILTIN_TOML;
-    collect_test_outcomes(
-        builtin,
-        filter_name_opt,
-        &mut outcomes,
-        &mut all_filter_names,
-        &mut tested_filter_names,
-    );
-
-    // Trust-gated: only verify project-local filters if trusted (SA-2025-RTK-002)
-    let project_path = std::path::Path::new(".rtk/filters.toml");
-    if project_path.exists() {
-        let trust_status = crate::hooks::trust::check_trust(project_path)
-            .unwrap_or(crate::hooks::trust::TrustStatus::Untrusted);
-        match trust_status {
-            crate::hooks::trust::TrustStatus::Trusted
-            | crate::hooks::trust::TrustStatus::EnvOverride => {
-                if let Ok(content) = std::fs::read_to_string(project_path) {
-                    collect_test_outcomes(
-                        &content,
-                        filter_name_opt,
-                        &mut outcomes,
-                        &mut all_filter_names,
-                        &mut tested_filter_names,
-                    );
-                }
-            }
-            _ => {
-                eprintln!("[rtk] WARNING: untrusted project filters skipped in verify");
-            }
-        }
-    }
-
-    let filters_without_tests = all_filter_names
-        .into_iter()
-        .filter(|name| {
-            // When a specific filter is requested, only report that one as missing tests
-            filter_name_opt.is_none_or(|f| name == f)
-        })
-        .filter(|name| !tested_filter_names.contains(name))
-        .collect();
-
-    VerifyResults {
-        outcomes,
-        filters_without_tests,
-    }
-}
-
-fn collect_test_outcomes(
-    content: &str,
-    filter_name_opt: Option<&str>,
-    outcomes: &mut Vec<TestOutcome>,
-    all_filter_names: &mut Vec<String>,
-    tested_filter_names: &mut std::collections::HashSet<String>,
-) {
-    let file: TomlFilterFile = match toml::from_str(content) {
-        Ok(f) => f,
-        Err(e) => {
-            eprintln!("[rtk] warning: TOML parse error during verify: {}", e);
-            return;
-        }
-    };
-
-    // Compile all filters and track their names
-    let mut compiled_filters: BTreeMap<String, CompiledFilter> = BTreeMap::new();
-    for (name, def) in file.filters {
-        all_filter_names.push(name.clone());
-        match compile_filter(name.clone(), def) {
-            Ok(f) => {
-                compiled_filters.insert(name, f);
-            }
-            Err(e) => eprintln!("[rtk] warning: filter '{}' compilation error: {}", name, e),
-        }
-    }
-
-    // Run tests
-    for (filter_name, tests) in file.tests {
-        if let Some(name) = filter_name_opt
-            && filter_name != name
-        {
-            continue;
-        }
-
-        tested_filter_names.insert(filter_name.clone());
-
-        let compiled = match compiled_filters.get(&filter_name) {
-            Some(f) => f,
-            None => {
-                eprintln!(
-                    "[rtk] warning: [[tests.{}]] references unknown filter",
-                    filter_name
-                );
-                continue;
-            }
-        };
-
-        for test in tests {
-            let actual = apply_filter(compiled, &test.input);
-            // Trim trailing newlines: TOML multiline strings end with a newline
-            let actual_cmp = actual.trim_end_matches('\n').to_string();
-            let expected_cmp = test.expected.trim_end_matches('\n').to_string();
-            outcomes.push(TestOutcome {
-                filter_name: filter_name.clone(),
-                test_name: test.name,
-                passed: actual_cmp == expected_cmp,
-                actual: actual_cmp,
-                expected: expected_cmp,
-            });
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Convenience wrapper (uses singleton — for run_fallback)
 // ---------------------------------------------------------------------------
 
 /// Find a matching filter from the global registry. Initialises the registry
 /// lazily on first call. Returns `None` if no filter matches.
+#[allow(clippy::doc_lazy_continuation)]
 pub fn find_matching_filter(command: &str) -> Option<&'static CompiledFilter> {
     if std::env::var("RTK_TOML_DEBUG").is_ok() {
         eprintln!(
@@ -1466,78 +1291,6 @@ replace = [
 
     // --- verify (PR2) ---
 
-    #[test]
-    fn test_run_filter_tests_passes_on_correct_expected() {
-        let content = r#"
-schema_version = 1
-
-[filters.make]
-match_command = "^make\\b"
-strip_lines_matching = ["^make\\[\\d+\\]:"]
-
-[[tests.make]]
-name = "strips entering/leaving lines"
-input = """
-make[1]: Entering directory '/home/user'
-gcc -O2 foo.c
-make[1]: Leaving directory '/home/user'
-"""
-expected = """
-gcc -O2 foo.c
-"""
-"#;
-        let mut outcomes = Vec::new();
-        let mut all_names = Vec::new();
-        let mut tested = std::collections::HashSet::new();
-        collect_test_outcomes(content, None, &mut outcomes, &mut all_names, &mut tested);
-        assert_eq!(outcomes.len(), 1);
-        assert!(
-            outcomes[0].passed,
-            "test should pass: {:?}",
-            outcomes[0].actual
-        );
-    }
-
-    #[test]
-    fn test_run_filter_tests_fails_on_wrong_expected() {
-        let content = r#"
-schema_version = 1
-
-[filters.make]
-match_command = "^make\\b"
-strip_lines_matching = ["^make\\[\\d+\\]:"]
-
-[[tests.make]]
-name = "wrong expected"
-input = "make[1]: Entering\ngcc foo.c"
-expected = "wrong output"
-"#;
-        let mut outcomes = Vec::new();
-        let mut all_names = Vec::new();
-        let mut tested = std::collections::HashSet::new();
-        collect_test_outcomes(content, None, &mut outcomes, &mut all_names, &mut tested);
-        assert_eq!(outcomes.len(), 1);
-        assert!(!outcomes[0].passed);
-    }
-
-    #[test]
-    fn test_filters_without_tests_detected() {
-        let content = r#"
-schema_version = 1
-
-[filters.make]
-match_command = "^make\\b"
-"#;
-        let mut outcomes = Vec::new();
-        let mut all_names = Vec::new();
-        let mut tested = std::collections::HashSet::new();
-        collect_test_outcomes(content, None, &mut outcomes, &mut all_names, &mut tested);
-        // No tests defined, but filter exists
-        assert_eq!(outcomes.len(), 0);
-        assert!(all_names.contains(&"make".to_string()));
-        assert!(!tested.contains("make"));
-    }
-
     // --- Multi-file architecture tests (build.rs) ---
 
     /// Verify BUILTIN_TOML was generated with the correct schema_version header.
@@ -1604,49 +1357,6 @@ match_command = "^make\\b"
                 name
             );
         }
-    }
-
-    /// Verify the exact count of built-in filters.
-    /// Fails if a file is added/removed without updating this test.
-    #[test]
-    fn test_builtin_filter_count() {
-        let filters = make_filters(BUILTIN_TOML);
-        assert_eq!(
-            filters.len(),
-            58,
-            "Expected exactly 58 built-in filters, got {}. \
-             Update this count when adding/removing filters in src/filters/.",
-            filters.len()
-        );
-    }
-
-    /// Verify that every built-in filter has at least one inline test.
-    /// Prevents shipping filters with zero test coverage.
-    #[test]
-    fn test_builtin_all_filters_have_inline_tests() {
-        let mut all_names: Vec<String> = Vec::new();
-        let mut tested: std::collections::HashSet<String> = std::collections::HashSet::new();
-        let mut outcomes = Vec::new();
-        collect_test_outcomes(
-            BUILTIN_TOML,
-            None,
-            &mut outcomes,
-            &mut all_names,
-            &mut tested,
-        );
-
-        let untested: Vec<&str> = all_names
-            .iter()
-            .filter(|name| !tested.contains(name.as_str()))
-            .map(|s| s.as_str())
-            .collect();
-
-        assert!(
-            untested.is_empty(),
-            "The following built-in filters have no inline tests: {:?}\n\
-             Add [[tests.<name>]] entries to the corresponding src/filters/<name>.toml file.",
-            untested
-        );
     }
 
     /// Verify that adding a new filter entry to any TOML content makes it

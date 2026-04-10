@@ -418,33 +418,6 @@ enum Commands {
         args: Vec<String>,
     },
 
-    /// Execute command without filtering but track usage
-    Proxy {
-        /// Command and arguments to execute
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
-        args: Vec<OsString>,
-    },
-
-    /// Trust project-local TOML filters in current directory
-    Trust {
-        /// List all trusted projects
-        #[arg(long)]
-        list: bool,
-    },
-
-    /// Revoke trust for project-local TOML filters
-    Untrust,
-
-    /// Verify hook integrity and run TOML filter inline tests
-    Verify {
-        /// Run tests only for this filter name
-        #[arg(long)]
-        filter: Option<String>,
-        /// Fail if any filter has no inline tests (CI mode)
-        #[arg(long)]
-        require_all: bool,
-    },
-
     /// Ruff linter/formatter with compact output
     Ruff {
         /// Ruff arguments (e.g., check, format --check)
@@ -874,9 +847,7 @@ enum GoCommands {
 
 /// RTK-only subcommands that should never fall back to raw execution.
 /// If Clap fails to parse these, show the Clap error directly.
-const RTK_META_COMMANDS: &[&str] = &[
-    "init", "config", "proxy", "verify", "trust", "untrust", "rewrite",
-];
+const RTK_META_COMMANDS: &[&str] = &["init", "config", "rewrite"];
 
 fn run_fallback(parse_error: clap::Error) -> Result<i32> {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -994,41 +965,6 @@ enum GtCommands {
 
 /// Split a string into shell-like tokens, respecting single and double quotes.
 /// e.g. `git log --format="%H %s"` → ["git", "log", "--format=%H %s"]
-fn shell_split(input: &str) -> Vec<String> {
-    // Simple implementation for proxy command parsing
-    let mut result = Vec::new();
-    let mut current = String::new();
-    let mut in_single = false;
-    let mut in_double = false;
-    let chars = input.chars();
-
-    for ch in chars {
-        match ch {
-            '\'' if !in_double => {
-                in_single = !in_single;
-            }
-            '"' if !in_single => {
-                in_double = !in_double;
-            }
-            ' ' | '\t' if !in_single && !in_double => {
-                if !current.is_empty() {
-                    result.push(current.clone());
-                    current.clear();
-                }
-            }
-            _ => {
-                current.push(ch);
-            }
-        }
-    }
-
-    if !current.is_empty() {
-        result.push(current);
-    }
-
-    result
-}
-
 fn main() {
     let code = match run_cli() {
         Ok(code) => code,
@@ -1050,16 +986,6 @@ fn run_cli() -> Result<i32> {
             return run_fallback(e);
         }
     };
-
-    // Warn if installed hook is outdated/missing (1/day, non-blocking).
-    hooks::hook_check::maybe_warn();
-
-    // Runtime integrity check for operational commands.
-    // Meta commands (init, gain, verify, config, etc.) skip the check
-    // because they don't go through the hook pipeline.
-    if is_operational_command(&cli.command) {
-        hooks::integrity::runtime_check()?;
-    }
 
     let code = match cli.command {
         Commands::Ls { args } => ls::run(&args, cli.verbose)?,
@@ -1633,258 +1559,9 @@ fn run_cli() -> Result<i32> {
             hooks::rewrite_cmd::run(&cmd)?;
             0
         }
-
-        Commands::Proxy { args } => {
-            use std::io::{Read, Write};
-            use std::process::Stdio;
-            use std::sync::atomic::{AtomicU32, Ordering};
-            use std::thread;
-
-            if args.is_empty() {
-                anyhow::bail!(
-                    "proxy requires a command to execute\nUsage: rtk proxy <command> [args...]"
-                );
-            }
-
-            // If a single quoted arg contains spaces, split it respecting quotes (#388).
-            // e.g. rtk proxy 'head -50 file.php' → cmd=head, args=["-50", "file.php"]
-            // e.g. rtk proxy 'git log --format="%H %s"' → cmd=git, args=["log", "--format=%H %s"]
-            let (cmd_name, cmd_args): (String, Vec<String>) = if args.len() == 1 {
-                let full = args[0].to_string_lossy();
-                let parts = shell_split(&full);
-                if parts.len() > 1 {
-                    (parts[0].clone(), parts[1..].to_vec())
-                } else {
-                    (full.into_owned(), vec![])
-                }
-            } else {
-                (
-                    args[0].to_string_lossy().into_owned(),
-                    args[1..]
-                        .iter()
-                        .map(|s| s.to_string_lossy().into_owned())
-                        .collect(),
-                )
-            };
-
-            if cli.verbose > 0 {
-                eprintln!("Proxy mode: {} {}", cmd_name, cmd_args.join(" "));
-            }
-
-            // ISSUE #897: Kill proxy child on SIGINT/SIGTERM to prevent orphan
-            // processes. Drop-based ChildGuard doesn't run on signals with
-            // panic=abort, so we register a signal handler that kills the child
-            // PID stored in this atomic.
-            static PROXY_CHILD_PID: AtomicU32 = AtomicU32::new(0);
-
-            #[cfg(unix)]
-            {
-                unsafe extern "C" fn handle_signal(sig: libc::c_int) {
-                    unsafe {
-                        let pid = PROXY_CHILD_PID.load(Ordering::SeqCst);
-                        if pid != 0 {
-                            libc::kill(pid as libc::pid_t, libc::SIGTERM);
-                            libc::waitpid(pid as libc::pid_t, std::ptr::null_mut(), 0);
-                        }
-                        // Re-raise with default handler so parent sees correct exit status
-                        libc::signal(sig, libc::SIG_DFL);
-                        libc::raise(sig);
-                    }
-                }
-                unsafe {
-                    libc::signal(
-                        libc::SIGINT,
-                        handle_signal as *const () as libc::sighandler_t,
-                    );
-                    libc::signal(
-                        libc::SIGTERM,
-                        handle_signal as *const () as libc::sighandler_t,
-                    );
-                }
-            }
-
-            struct ChildGuard(Option<std::process::Child>);
-            impl Drop for ChildGuard {
-                fn drop(&mut self) {
-                    if let Some(mut child) = self.0.take() {
-                        let _ = child.kill();
-                        let _ = child.wait();
-                    }
-                    PROXY_CHILD_PID.store(0, Ordering::SeqCst);
-                }
-            }
-
-            let mut child = ChildGuard(Some(
-                core::utils::resolved_command(cmd_name.as_ref())
-                    .args(&cmd_args)
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::piped())
-                    .spawn()
-                    .context(format!("Failed to execute command: {}", cmd_name))?,
-            ));
-
-            // Store child PID for signal handler before anything can fail
-            if let Some(ref inner) = child.0 {
-                PROXY_CHILD_PID.store(inner.id(), Ordering::SeqCst);
-            }
-
-            let inner = child.0.as_mut().context("Child process missing")?;
-            let stdout_pipe = inner
-                .stdout
-                .take()
-                .context("Failed to capture child stdout")?;
-            let stderr_pipe = inner
-                .stderr
-                .take()
-                .context("Failed to capture child stderr")?;
-
-            const CAP: usize = 1_048_576;
-
-            let stdout_handle = thread::spawn(move || -> std::io::Result<Vec<u8>> {
-                let mut reader = stdout_pipe;
-                let mut captured = Vec::new();
-                let mut buf = [0u8; 8192];
-
-                loop {
-                    let count = reader.read(&mut buf)?;
-                    if count == 0 {
-                        break;
-                    }
-                    if captured.len() < CAP {
-                        let take = count.min(CAP - captured.len());
-                        captured.extend_from_slice(&buf[..take]);
-                    }
-                    let mut out = std::io::stdout().lock();
-                    out.write_all(&buf[..count])?;
-                    out.flush()?;
-                }
-
-                Ok(captured)
-            });
-
-            let stderr_handle = thread::spawn(move || -> std::io::Result<Vec<u8>> {
-                let mut reader = stderr_pipe;
-                let mut captured = Vec::new();
-                let mut buf = [0u8; 8192];
-
-                loop {
-                    let count = reader.read(&mut buf)?;
-                    if count == 0 {
-                        break;
-                    }
-                    if captured.len() < CAP {
-                        let take = count.min(CAP - captured.len());
-                        captured.extend_from_slice(&buf[..take]);
-                    }
-                    let mut err = std::io::stderr().lock();
-                    err.write_all(&buf[..count])?;
-                    err.flush()?;
-                }
-
-                Ok(captured)
-            });
-
-            let status = child
-                .0
-                .take()
-                .context("Child process missing")?
-                .wait()
-                .context(format!("Failed waiting for command: {}", cmd_name))?;
-
-            stdout_handle
-                .join()
-                .map_err(|_| anyhow::anyhow!("stdout streaming thread panicked"))??;
-            stderr_handle
-                .join()
-                .map_err(|_| anyhow::anyhow!("stderr streaming thread panicked"))??;
-
-            core::utils::exit_code_from_status(&status, &cmd_name)
-        }
-
-        Commands::Trust { list } => {
-            hooks::trust::run_trust(list)?;
-            0
-        }
-
-        Commands::Untrust => {
-            hooks::trust::run_untrust()?;
-            0
-        }
-
-        Commands::Verify {
-            filter,
-            require_all,
-        } => {
-            if filter.is_some() {
-                // Filter-specific mode: run only that filter's tests
-                hooks::verify_cmd::run(filter, require_all)?;
-            } else {
-                // Default or --require-all: always run integrity check first
-                hooks::integrity::run_verify(cli.verbose)?;
-                hooks::verify_cmd::run(None, require_all)?;
-            }
-            0
-        }
     };
 
     Ok(code)
-}
-
-/// Returns true for commands that are invoked via the hook pipeline
-/// (i.e., commands that process rewritten shell commands).
-/// Meta commands (init, gain, verify, etc.) are excluded because
-/// they are run directly by the user, not through the hook.
-/// Returns true for commands that go through the hook pipeline
-/// and therefore require integrity verification.
-///
-/// SECURITY: whitelist pattern — new commands are NOT integrity-checked
-/// until explicitly added here. A forgotten command fails open (no check)
-/// rather than creating false confidence about what's protected.
-fn is_operational_command(cmd: &Commands) -> bool {
-    matches!(
-        cmd,
-        Commands::Ls { .. }
-            | Commands::Tree { .. }
-            | Commands::Read { .. }
-            | Commands::Smart { .. }
-            | Commands::Git { .. }
-            | Commands::Gh { .. }
-            | Commands::Pnpm { .. }
-            | Commands::Err { .. }
-            | Commands::Test { .. }
-            | Commands::Json { .. }
-            | Commands::Deps { .. }
-            | Commands::Env { .. }
-            | Commands::Find { .. }
-            | Commands::Diff { .. }
-            | Commands::Log { .. }
-            | Commands::Dotnet { .. }
-            | Commands::Docker { .. }
-            | Commands::Kubectl { .. }
-            | Commands::Summary { .. }
-            | Commands::Grep { .. }
-            | Commands::Wget { .. }
-            | Commands::Vitest { .. }
-            | Commands::Prisma { .. }
-            | Commands::Tsc { .. }
-            | Commands::Next { .. }
-            | Commands::Lint { .. }
-            | Commands::Prettier { .. }
-            | Commands::Playwright { .. }
-            | Commands::Cargo { .. }
-            | Commands::Npm { .. }
-            | Commands::Npx { .. }
-            | Commands::Curl { .. }
-            | Commands::Ruff { .. }
-            | Commands::Pytest { .. }
-            | Commands::Rake { .. }
-            | Commands::Rubocop { .. }
-            | Commands::Rspec { .. }
-            | Commands::Pip { .. }
-            | Commands::Go { .. }
-            | Commands::GolangciLint { .. }
-            | Commands::Gt { .. }
-    )
 }
 
 #[cfg(test)]
@@ -2089,11 +1766,7 @@ mod tests {
     #[test]
     fn test_meta_command_list_is_complete() {
         // Verify all meta-commands are in the guard list by checking they parse with valid syntax
-        let meta_cmds_that_parse = [
-            vec!["rtk", "init"],
-            vec!["rtk", "config"],
-            vec!["rtk", "proxy", "echo", "hi"],
-        ];
+        let meta_cmds_that_parse = [vec!["rtk", "init"], vec!["rtk", "config"]];
         for args in &meta_cmds_that_parse {
             let result = Cli::try_parse_from(args.iter());
             assert!(
@@ -2102,41 +1775,6 @@ mod tests {
                 args
             );
         }
-    }
-
-    #[test]
-    fn test_shell_split_simple() {
-        assert_eq!(
-            shell_split("head -50 file.php"),
-            vec!["head", "-50", "file.php"]
-        );
-    }
-
-    #[test]
-    fn test_shell_split_double_quotes() {
-        assert_eq!(
-            shell_split(r#"git log --format="%H %s""#),
-            vec!["git", "log", "--format=%H %s"]
-        );
-    }
-
-    #[test]
-    fn test_shell_split_single_quotes() {
-        assert_eq!(
-            shell_split("grep -r 'hello world' ."),
-            vec!["grep", "-r", "hello world", "."]
-        );
-    }
-
-    #[test]
-    fn test_shell_split_single_word() {
-        assert_eq!(shell_split("ls"), vec!["ls"]);
-    }
-
-    #[test]
-    fn test_shell_split_empty() {
-        let result: Vec<String> = shell_split("");
-        assert!(result.is_empty());
     }
 
     #[test]

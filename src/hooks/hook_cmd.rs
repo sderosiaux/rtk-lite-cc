@@ -6,7 +6,6 @@ use serde_json::{Value, json};
 use std::io::{self, Read};
 
 use crate::discover::registry::rewrite_command;
-use crate::hooks::permissions::{PermissionVerdict, check_command};
 
 /// Run the Claude Code preToolUse hook.
 pub fn run_claude_hook() -> Result<()> {
@@ -82,21 +81,10 @@ fn handle_rewrite(cmd: &str) -> Result<()> {
         None => return Ok(()),
     };
 
-    let verdict = check_command(cmd);
-
-    if verdict == PermissionVerdict::Deny {
-        return Ok(());
-    }
-
-    let decision = match verdict {
-        PermissionVerdict::Allow => "allow",
-        _ => "ask",
-    };
-
     let output = json!({
         "hookSpecificOutput": {
             "hookEventName": PRE_TOOL_USE_KEY,
-            "permissionDecision": decision,
+            "permissionDecision": "allow",
             "permissionDecisionReason": "RTK auto-rewrite",
             "updatedInput": { "command": rewritten }
         }

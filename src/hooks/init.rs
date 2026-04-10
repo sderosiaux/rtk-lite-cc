@@ -9,7 +9,6 @@ use tempfile::NamedTempFile;
 use super::constants::{
     CLAUDE_DIR, HOOKS_SUBDIR, PRE_TOOL_USE_KEY, REWRITE_HOOK_FILE, SETTINGS_JSON,
 };
-use super::integrity;
 
 // Embedded hook script (guards before set -euo pipefail)
 const REWRITE_HOOK: &str = include_str!("../../hooks/claude/rtk-rewrite.sh");
@@ -112,15 +111,6 @@ fn ensure_hook_installed(hook_path: &Path, verbose: u8) -> Result<bool> {
     use std::os::unix::fs::PermissionsExt;
     fs::set_permissions(hook_path, fs::Permissions::from_mode(0o755))
         .with_context(|| format!("Failed to set hook permissions: {}", hook_path.display()))?;
-
-    // Store SHA-256 hash for runtime integrity verification.
-    // Always store (idempotent) to ensure baseline exists even for
-    // hooks installed before integrity checks were added.
-    integrity::store_hash(hook_path)
-        .with_context(|| format!("Failed to store integrity hash for {}", hook_path.display()))?;
-    if verbose > 0 && changed {
-        eprintln!("Stored integrity hash for hook");
-    }
 
     Ok(changed)
 }
@@ -290,12 +280,7 @@ pub fn uninstall(global: bool, verbose: u8) -> Result<()> {
         removed.push(format!("Hook: {}", hook_path.display()));
     }
 
-    // 2. Remove integrity hash file
-    if integrity::remove_hash(&hook_path)? {
-        removed.push("Integrity hash: removed".to_string());
-    }
-
-    // 3. Remove hook entry from settings.json
+    // 2. Remove hook entry from settings.json
     if remove_hook_from_settings(verbose)? {
         removed.push("settings.json: removed RTK hook entry".to_string());
     }
@@ -593,7 +578,14 @@ fn show_claude_config() -> Result<()> {
             let has_guards =
                 hook_content.contains("command -v rtk") && hook_content.contains("command -v jq");
             let is_thin_delegator = hook_content.contains("rtk rewrite");
-            let hook_version = super::hook_check::parse_hook_version(&hook_content);
+            let hook_version = hook_content
+                .lines()
+                .take(5)
+                .find_map(|l| {
+                    l.strip_prefix("# rtk-hook-version:")
+                        .and_then(|v| v.trim().parse::<u8>().ok())
+                })
+                .unwrap_or(0);
 
             if !is_executable {
                 println!(
@@ -628,26 +620,6 @@ fn show_claude_config() -> Result<()> {
         }
     } else {
         println!("[--] Hook: not found");
-    }
-
-    // Check hook integrity
-    match integrity::verify_hook_at(&hook_path) {
-        Ok(integrity::IntegrityStatus::Verified) => {
-            println!("[ok] Integrity: hook hash verified");
-        }
-        Ok(integrity::IntegrityStatus::Tampered { .. }) => {
-            println!("[FAIL] Integrity: hook modified outside rtk init (run: rtk verify)");
-        }
-        Ok(integrity::IntegrityStatus::NoBaseline) => {
-            println!("[warn] Integrity: no baseline hash (run: rtk init -g to establish)");
-        }
-        Ok(integrity::IntegrityStatus::NotInstalled)
-        | Ok(integrity::IntegrityStatus::OrphanedHash) => {
-            // Don't show integrity line if hook isn't installed
-        }
-        Err(_) => {
-            println!("[warn] Integrity: check failed");
-        }
     }
 
     // Check settings.json
