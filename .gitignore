@@ -46,3 +46,6 @@ claudedocs
 
 # icm 
 .fastembed_cache/
+
+# Local Claude Code config
+.claude/
